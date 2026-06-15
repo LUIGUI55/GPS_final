@@ -1083,8 +1083,7 @@
         suppressPolylines: true
       });
 
-      // Plot all available cities as small structural background markers
-      plotCityNetwork();
+
 
       // Render default risk zones on the map
       drawRiskZones();
@@ -1129,36 +1128,7 @@
       });
     }
 
-    // Draw cities dots to represent the offline database graph structure on the map
-    function plotCityNetwork() {
-      for (const [cityName, data] of Object.entries(citiesCoordinates)) {
-        const position = { lat: data.lat, lng: data.lon };
 
-        const cityDot = new google.maps.Marker({
-          position: position,
-          map: map,
-          title: cityName,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 4,
-            fillColor: "#334155",
-            fillOpacity: 0.7,
-            strokeColor: "#475569",
-            strokeWeight: 1,
-          }
-        });
-
-        // Popup showing city name
-        const infoWindow = new google.maps.InfoWindow({
-          content: `<div style="color:#0f172a; font-family:'Inter'; font-size:12px; font-weight:600; padding:2px;">${cityName}</div>`
-        });
-
-        cityDot.addListener("click", () => {
-          infoWindow.open(map, cityDot);
-          setTimeout(() => infoWindow.close(), 2500);
-        });
-      }
-    }
 
     // Subtly update values on sliders
     document.getElementById("hour").addEventListener("input", (e) => {
