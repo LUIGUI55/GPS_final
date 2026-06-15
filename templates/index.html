@@ -778,6 +778,14 @@
               </label>
             </div>
 
+            <div class="toggle-row" style="margin-top: 8px;">
+              <label class="form-label" style="margin-bottom: 0;"><i data-lucide="shield-alert" style="width: 14px; height: 14px; display: inline; vertical-align: middle; color: var(--accent-red); margin-right: 4px;"></i> Mostrar Zonas Rojas (Riesgo)</label>
+              <label class="switch">
+                <input type="checkbox" id="toggle-risk-zones" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
             <!-- Precio Gasolina Slider -->
             <div class="slider-container"
               style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 4px;">
@@ -930,6 +938,54 @@
     // Cities coordinates lookup injected from Python
     const citiesCoordinates = {{ cities_data | tojson | safe }};
 
+    // High-risk zones definition in Mexico (Zonas Rojas)
+    const riskZones = [
+      {
+        name: "Cumbres de Maltrata (Puebla - Veracruz)",
+        lat: 18.82,
+        lon: -97.27,
+        radius: 35000, // in meters (35km)
+        desc: "Zona de alta montaña con reportes frecuentes de robo con violencia a transporte de carga y neblina densa."
+      },
+      {
+        name: "Corredor Celaya - Salamanca - Irapuato",
+        lat: 20.52,
+        lon: -101.0,
+        radius: 30000,
+        desc: "Zona industrial con alta incidencia delictiva por asaltos y robo de vehículos."
+      },
+      {
+        name: "Uruapan - Apatzingán (Michoacán)",
+        lat: 19.25,
+        lon: -102.1,
+        radius: 45000,
+        desc: "Frecuentes bloqueos viales e incidentes de seguridad relacionados con grupos delictivos."
+      },
+      {
+        name: "Frontera Jalisco - Zacatecas",
+        lat: 21.8,
+        lon: -103.0,
+        radius: 40000,
+        desc: "Carreteras estatales con reportes recurrentes de asaltos y despojo de vehículos."
+      },
+      {
+        name: "Carretera Reynosa - Nuevo Laredo",
+        lat: 26.0,
+        lon: -98.8,
+        radius: 65000,
+        desc: "Zona de alto riesgo por disputa de territorio y retenes no oficiales."
+      },
+      {
+        name: "Arco Norte (Tramo Jilotepec - Tula)",
+        lat: 20.0,
+        lon: -99.3,
+        radius: 25000,
+        desc: "Arco Norte: Alto índice de robo nocturno a transporte de carga con violencia."
+      }
+    ];
+
+    let riskZoneCircles = [];
+
     // Google Maps Custom Dark Style JSON (Midnight theme)
     const mapStyleDark = [
       { elementType: "geometry", stylers: [{ color: "#0f172a" }] }, // Slate-900
@@ -1030,11 +1086,47 @@
       // Plot all available cities as small structural background markers
       plotCityNetwork();
 
+      // Render default risk zones on the map
+      drawRiskZones();
+
       // Initialize Autocomplete text search fields
       initAutocomplete();
 
       // Setup dynamic stops handler
       setupStopsHandler();
+    }
+
+    // Render risk zones as red circles on the map
+    function drawRiskZones() {
+      riskZones.forEach(zone => {
+        const circle = new google.maps.Circle({
+          strokeColor: "#ef4444",
+          strokeOpacity: 0.6,
+          strokeWeight: 1.5,
+          fillColor: "#ef4444",
+          fillOpacity: 0.25,
+          map: map,
+          center: { lat: zone.lat, lng: zone.lon },
+          radius: zone.radius
+        });
+
+        // Create InfoWindow for each zone on click
+        const infoWindow = new google.maps.InfoWindow({
+          content: `
+            <div style="font-family: 'Inter', sans-serif; padding: 8px; max-width: 220px; color: #1e293b;">
+              <h4 style="margin: 0 0 6px 0; color: #ef4444; font-weight: 600; font-size: 14px;">🚨 ${zone.name}</h4>
+              <p style="margin: 0; font-size: 12px; line-height: 1.4; color: #64748b;">${zone.desc}</p>
+            </div>
+          `
+        });
+
+        circle.addListener("click", (e) => {
+          infoWindow.setPosition(e.latLng);
+          infoWindow.open(map);
+        });
+
+        riskZoneCircles.push(circle);
+      });
     }
 
     // Draw cities dots to represent the offline database graph structure on the map
@@ -1083,6 +1175,13 @@
 
     document.getElementById("fuel-price").addEventListener("input", (e) => {
       document.getElementById("fuel-price-val").innerText = `$${parseFloat(e.target.value).toFixed(2)} MXN/L`;
+    });
+
+    document.getElementById("toggle-risk-zones").addEventListener("change", (e) => {
+      const show = e.target.checked;
+      riskZoneCircles.forEach(circle => {
+        circle.setMap(show ? map : null);
+      });
     });
 
     // Helper to check if a place result is inside Mexico
