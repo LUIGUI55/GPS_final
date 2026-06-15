@@ -1,2 +1,7 @@
 coord.py
 templado.py
+__pycache__/
+*.pyc
+.env
+.ipynb_checkpoints/
+*.DS_Store

@@ -1,321 +1,1483 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <link rel="icon" href="{{ url_for('static', filename='fabicon.ico') }}" type="image/x-icon" />
 
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Calcula tu Ruta - Mapa con Vehículos</title>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPS México Premium - Optimización A* y Análisis de Riesgo</title>
+
+  <!-- SEO Meta Tags -->
+  <meta name="description"
+    content="Planificador inteligente de rutas en México utilizando el algoritmo A* con heurística de Manhattan y modelos predictivos de riesgo vial.">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
   <style>
-    * { box-sizing: border-box; }
-    body, html {
-      margin: 0; padding: 0; height: 100%;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #121212;
-      color: #eee;
+    :root {
+      --bg-slate-950: #f8fafc;
+      --bg-slate-900: #ffffff;
+      --primary: #1e40af;
+      /* Corporate blue */
+      --primary-hover: #1d4ed8;
+      --accent-red: #ef4444;
+      --accent-yellow: #f59e0b;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border-color: #cbd5e1;
+      --card-bg: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body,
+    html {
+      height: 100%;
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-slate-950);
+      color: var(--text-main);
       overflow: hidden;
     }
-    #map { width: 100vw; height: 100vh; }
 
-    #infoWindow {
-      position: fixed; top: 20px; right: 20px; width: 340px;
-      max-height: 80vh; background-color: #1e1e1ecc;
-      border-radius: 12px; padding: 20px;
-      box-shadow: 0 8px 24px rgba(250, 204, 21, 0.8);
-      overflow-y: auto; color: #eee;
-      z-index: 1000; display: flex; flex-direction: column;
+    #app-container {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      position: relative;
     }
 
-    #infoWindow h1 {
-      margin: 0 0 12px 0; color: #facc15;
-      font-size: 1.7rem; user-select: none;
+    /* Sidebar control panel */
+    #sidebar {
+      width: 420px;
+      height: 100%;
+      background: var(--card-bg);
+      border-right: 1px solid var(--border-color);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease;
     }
 
-    #resultado {
-      flex-grow: 1; font-size: 1.1rem;
-      line-height: 1.4; margin-bottom: 15px;
+    .sidebar-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-color);
+      background: #f1f5f9;
     }
 
-    #instrucciones {
-      font-size: 0.95rem;
-      line-height: 1.3;
-      max-height: 250px;
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+
+    .brand-icon {
+      padding: 8px;
+      background: var(--primary);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-title {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+    }
+
+    .brand-title span {
+      color: var(--accent-red);
+      font-weight: 400;
+      font-size: 1.1rem;
+      margin-left: 4px;
+    }
+
+    .status-badge-container {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #e2e8f0;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .status-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #10b981;
+    }
+
+    /* Scrollable form and content */
+    .sidebar-content {
+      flex-grow: 1;
       overflow-y: auto;
-      margin-bottom: 15px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
 
-    #btn-close {
-      align-self: flex-end;
-      background-color: transparent;
-      border: none; color: #facc15;
-      font-weight: 700; font-size: 1.2rem;
-      cursor: pointer; margin-bottom: 10px;
-      user-select: none;
-    }
-    #btn-close:hover { color: #eab308; }
-
-    #btn-clear, #btn-buscar {
-      background-color: #facc15; border: none;
-      border-radius: 8px; padding: 10px;
-      font-weight: 700; color: #121212;
-      cursor: pointer; margin-bottom: 10px;
-    }
-    #btn-clear:hover, #btn-buscar:hover {
-      background-color: #eab308;
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
-    @media (max-width: 600px) {
-      #infoWindow {
-        width: 95vw; max-height: 35vh;
-        bottom: 20px; top: auto; right: 50%;
-        transform: translateX(50%);
-        border-radius: 10px; padding: 15px;
-        font-size: 0.9rem;
+    .form-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .select-wrapper {
+      position: relative;
+    }
+
+    .select-wrapper::after {
+      content: '▼';
+      font-size: 10px;
+      color: var(--text-muted);
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    select,
+    input[type="text"] {
+      width: 100%;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    select {
+      padding-right: 35px;
+      appearance: none;
+      cursor: pointer;
+    }
+
+    select:focus,
+    input[type="text"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.2);
+    }
+
+    /* Sliders styling */
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .slider-val {
+      font-weight: bold;
+      color: var(--primary);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+      outline: none;
+      appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+    }
+
+    /* Toggles and checkboxes */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #cbd5e1;
+      transition: .3s;
+      border-radius: 24px;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked+.toggle-slider {
+      background-color: var(--primary);
+    }
+
+    input:checked+.toggle-slider:before {
+      transform: translateX(20px);
+    }
+
+    /* Buttons */
+    .btn-search {
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s ease;
+    }
+
+    .btn-search:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-clear {
+      width: 100%;
+      padding: 10px;
+      background: #f1f5f9;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-clear:hover {
+      background: #e2e8f0;
+      color: var(--text-main);
+    }
+
+    /* Results section card stack */
+    #results-panel {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-cols: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stat-label i {
+      color: var(--primary);
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    /* Budget Hero Card */
+    .budget-hero {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .budget-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .budget-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--primary);
+    }
+
+    .budget-breakdown {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+
+    .breakdown-row {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+    }
+
+    .budget-total {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-top: 8px;
+      border-top: 1px solid #bfdbfe;
+    }
+
+    .budget-total-label {
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .budget-total-val {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    /* Risk analysis panel */
+    .risk-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .risk-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .risk-header i {
+      color: var(--accent-yellow);
+    }
+
+    .risk-title {
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .risk-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .progress-bar-bg {
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 4px;
+      background-color: var(--primary);
+      transition: width 1s ease;
+    }
+
+    .risk-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+
+    .risk-status {
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .risk-val {
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    /* Itinerary timeline stepper */
+    .itinerary-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .itinerary-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      padding-left: 20px;
+    }
+
+    .timeline-node {
+      position: relative;
+      padding-bottom: 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .timeline-node:last-child {
+      padding-bottom: 0;
+    }
+
+    .timeline-node::before {
+      content: '';
+      position: absolute;
+      left: -16px;
+      top: 5px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #cbd5e1;
+      border: 2px solid #ffffff;
+      z-index: 2;
+    }
+
+    .timeline-node.first::before {
+      background: var(--primary);
+      width: 10px;
+      height: 10px;
+      left: -17px;
+      top: 4px;
+    }
+
+    .timeline-node.last::before {
+      background: var(--accent-red);
+      width: 10px;
+      height: 10px;
+      left: -17px;
+      top: 4px;
+    }
+
+    .timeline-node::after {
+      content: '';
+      position: absolute;
+      left: -13px;
+      top: 12px;
+      width: 2px;
+      height: calc(100% - 4px);
+      background: #cbd5e1;
+      z-index: 1;
+    }
+
+    .timeline-node:last-child::after {
+      display: none;
+    }
+
+    .timeline-node.active-city {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    /* Error Message Panel */
+    #error-card {
+      display: none;
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      padding: 12px;
+      border-radius: 6px;
+      align-items: center;
+      gap: 12px;
+      color: #991b1b;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    #error-card i {
+      flex-shrink: 0;
+      color: var(--accent-red);
+    }
+
+    /* Map view occupies rest of screen */
+    #map-wrapper {
+      flex-grow: 1;
+      height: 100%;
+      position: relative;
+      z-index: 10;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background-color: #e5e7eb;
+    }
+
+    /* Google Maps custom control panel overlays */
+    .map-overlay {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .overlay-badge {
+      pointer-events: auto;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      padding: 8px 16px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .overlay-badge i {
+      font-size: 14px;
+    }
+
+    .overlay-badge.green i {
+      color: #10b981;
+    }
+
+    .overlay-badge.blue i {
+      color: #3b82f6;
+    }
+
+    /* Responsive Mobile styling */
+    @media (max-width: 900px) {
+      #app-container {
+        flex-direction: column-reverse;
       }
-      #btn-close { font-size: 1rem; }
-    }
 
-    #vehiculoPanel {
-      position: fixed; bottom: 25px; left: 50%;
-      transform: translateX(-50%);
-      background-color: #1e1e1ecc;
-      padding: 12px 20px; border-radius: 12px;
-      box-shadow: 0 6px 12px rgba(250, 204, 21, 0.6);
-      z-index: 1000; display: flex;
-      align-items: center; gap: 10px; color: #eee;
-    }
-    #vehiculoPanel select {
-      padding: 6px 12px;
-      border-radius: 8px;
-      border: none;
-      background-color: #facc15;
-      color: #121212;
-      font-weight: bold;
-    }
+      #sidebar {
+        width: 100%;
+        height: 60vh;
+        border-right: none;
+        border-top: 1px solid var(--border-color);
+      }
 
-    #horarioPanel {
-      position: fixed; bottom: 90px; left: 50%;
-      transform: translateX(-50%);
-      background-color: #1e1e1ecc;
-      padding: 10px 18px; border-radius: 12px;
-      box-shadow: 0 6px 12px rgba(250, 204, 21, 0.6);
-      z-index: 1000; display: flex;
-      align-items: center; gap: 10px; color: #eee;
-    }
+      #map-wrapper {
+        height: 40vh;
+      }
 
-    #horarioPanel select {
-      padding: 6px 12px;
-      border-radius: 8px;
-      border: none;
-      background-color: #facc15;
-      color: #121212;
-      font-weight: bold;
+      .map-overlay {
+        top: 16px;
+        right: 16px;
+      }
     }
   </style>
 </head>
+
 <body>
 
-<div id="map"></div>
+  <div id="app-container">
 
-<aside id="infoWindow">
-  <div style="margin-bottom: 15px;">
-    <input id="search-origen" type="text" placeholder="Buscar lugar de origen" style="width: 100%; padding: 8px 12px; border-radius: 6px; margin-bottom: 10px;" />
-    <input id="search-destino" type="text" placeholder="Buscar lugar de destino" style="width: 100%; padding: 8px 12px; border-radius: 6px;" />
+    <!-- Sidebar Panel -->
+    <aside id="sidebar">
+      <header class="sidebar-header">
+        <div class="brand">
+          <div class="brand-icon">
+            <i data-lucide="compass" style="color: white; width: 20px; height: 20px;"></i>
+          </div>
+          <h1 class="brand-title">GPS México<span>Lenguajes Y Automatas</span></h1>
+        </div>
+        <div class="status-badge-container">
+          <div class="status-badge">
+            <span class="dot pulse"></span>Implementacion Manhattan
+          </div>
+        </div>
+      </header>
+
+      <div class="sidebar-content">
+        <!-- Input Route Form -->
+        <form id="route-form" style="display: flex; flex-direction: column; gap: 16px;">
+
+          <div class="form-group">
+            <label class="form-label" for="origen-input">Ciudad de Origen</label>
+            <div style="position: relative;">
+              <input type="text" id="origen-input" placeholder="Escribe un estado, municipio o ciudad..." required
+                style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-size: 13px; outline: none; transition: border-color 0.3s ease;">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="destino-input">Ciudad de Destino</label>
+            <div style="position: relative;">
+              <input type="text" id="destino-input" placeholder="Escribe un estado, municipio o ciudad..." required
+                style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-size: 13px; outline: none; transition: border-color 0.3s ease;">
+            </div>
+          </div>
+
+          <!-- Collapsible Settings Panel -->
+          <div
+            style="display: flex; flex-direction: column; gap: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 14px; border-radius: 12px; margin-top: 4px;">
+
+            <div class="form-group">
+              <label class="form-label" for="vehiculo">Vehículo & Rendimiento</label>
+              <div class="select-wrapper">
+                <select id="vehiculo">
+                  <option value="12.0">Automóvil Sedán (12.0 km/L)</option>
+                  <option value="8.0">Camioneta SUV (8.0 km/L)</option>
+                  <option value="25.0">Motocicleta (25.0 km/L)</option>
+                  <option value="4.0">Camión de Carga (4.0 km/L)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="slider-container">
+              <div class="slider-header">
+                <label class="form-label">Hora del Viaje</label>
+                <span id="hour-val" class="slider-val">12:00 hrs</span>
+              </div>
+              <input type="range" id="hour" min="0" max="23" value="12">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="day">Día de la Semana</label>
+              <div class="select-wrapper">
+                <select id="day">
+                  <option value="0">Lunes (Laboral)</option>
+                  <option value="1">Martes (Laboral)</option>
+                  <option value="2" selected>Miércoles (Laboral)</option>
+                  <option value="3">Jueves (Laboral)</option>
+                  <option value="4">Viernes (Fin de semana)</option>
+                  <option value="5">Sábado (Fin de semana)</option>
+                  <option value="6">Domingo (Fin de semana)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="toggle-row">
+              <label class="form-label" style="margin-bottom: 0;">¿Es Día Festivo / Vacaciones?</label>
+              <label class="switch">
+                <input type="checkbox" id="holiday">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <!-- Precio Gasolina Slider -->
+            <div class="slider-container"
+              style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 4px;">
+              <div class="slider-header">
+                <span class="form-label" style="margin-bottom: 0;">Precio de Gasolina</span>
+                <span id="fuel-price-val" class="slider-val">$24.50 MXN/L</span>
+              </div>
+              <input type="range" id="fuel-price" min="19" max="30" step="0.10" value="24.50">
+            </div>
+
+            <!-- A* Weights Settings -->
+            <div
+              style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 4px; display: flex; flex-direction: column; gap: 12px;">
+              <span class="form-label" style="font-size: 10px; color: var(--primary);">Factores de Optimización
+                A*</span>
+
+              <div class="slider-container">
+                <div class="slider-header">
+                  <span>Peso del Combustible</span>
+                  <span id="weight-fuel-val" class="slider-val" style="color: var(--text-muted)">1.0x</span>
+                </div>
+                <input type="range" id="weight-fuel" min="0" max="5" step="0.5" value="1">
+              </div>
+
+              <div class="slider-container">
+                <div class="slider-header">
+                  <span>Peso del Peaje (Casetas)</span>
+                  <span id="weight-toll-val" class="slider-val" style="color: var(--text-muted)">1.0x</span>
+                </div>
+                <input type="range" id="weight-toll" min="0" max="5" step="0.5" value="1">
+              </div>
+            </div>
+
+          </div>
+
+          <button type="submit" class="btn-search" id="btn-submit">
+            <i data-lucide="navigation"></i> Optimizar Ruta Dinámica
+          </button>
+
+          <button type="button" class="btn-clear" id="btn-clear" style="display: none;">
+            <i data-lucide="rotate-ccw"></i> Limpiar Todo
+          </button>
+        </form>
+
+        <!-- Error Card Overlay -->
+        <div id="error-card">
+          <i data-lucide="alert-triangle"></i>
+          <span id="error-text">Ocurrió un error.</span>
+        </div>
+
+        <!-- Analysis Results Stack -->
+        <div id="results-panel">
+
+          <div class="stat-grid">
+            <div class="stat-card">
+              <span class="stat-label"><i data-lucide="milestone"></i> Distancia</span>
+              <span class="stat-value" id="res-dist">0 km</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label"><i data-lucide="fuel"></i> Gasolina</span>
+              <span class="stat-value" id="res-gas">$0.00</span>
+            </div>
+          </div>
+
+          <!-- Budget Hero -->
+          <div class="budget-hero">
+            <div class="budget-header">
+              <span class="budget-title">Presupuesto Estimado</span>
+              <i data-lucide="wallet" style="color: var(--primary); width: 16px; height: 16px;"></i>
+            </div>
+            <div class="budget-breakdown">
+              <div class="breakdown-row">
+                <span>Combustible</span>
+                <span id="res-breakdown-fuel">$0.00</span>
+              </div>
+              <div class="breakdown-row">
+                <span>Peajes (Casetas)</span>
+                <span id="res-breakdown-tolls">$0.00</span>
+              </div>
+            </div>
+            <div class="budget-total">
+              <span class="budget-total-label">Total del Viaje</span>
+              <span class="budget-total-val" id="res-total">$0.00</span>
+            </div>
+          </div>
+
+          <!-- Risk Card -->
+          <div class="risk-card">
+            <div class="risk-header">
+              <i data-lucide="shield-alert"></i>
+              <span class="risk-title">Puntuación de Riesgo ML</span>
+            </div>
+            <p class="risk-desc">Probabilidad de paros, bloqueos o incidentes viales estimada mediante Random Forest.
+            </p>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="res-risk-bar"></div>
+            </div>
+            <div class="risk-meta">
+              <span class="risk-status" id="res-risk-status">Bajo</span>
+              <span class="risk-val" id="res-risk-percentage">0.0%</span>
+            </div>
+          </div>
+
+          <!-- Itinerary Timeline -->
+          <div class="itinerary-card">
+            <div class="itinerary-title">Itinerario Paso a Paso</div>
+            <div class="timeline" id="res-timeline">
+              <!-- Timeline elements dynamically injected -->
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </aside>
+
+    <!-- Google Map Container -->
+    <main id="map-wrapper">
+      <div id="map"></div>
+
+      <!-- Floating status overlay -->
+      <div class="map-overlay">
+        <div class="overlay-badge green">
+          <span class="dot pulse"></span>
+          <span>Red Vial Conectada</span>
+        </div>
+        <div class="overlay-badge blue">
+          <i data-lucide="sliders-horizontal"></i>
+          <span>Optimización A* Activa</span>
+        </div>
+      </div>
+    </main>
+
   </div>
-  <button id="btn-buscar">Buscar ruta</button>
-  <button id="btn-clear">Limpiar mapa</button>
-  <button id="btn-close">&times;</button>
-  <h1>Calcula tu ruta 🚗</h1>
-  <div id="resultado">Haz clic en el mapa para elegir origen y destino.</div>
-  <div id="instrucciones"></div>
-</aside>
 
-<div id="vehiculoPanel">
-  <label for="tipoVehiculo">Tipo de vehículo:</label>
-  <select id="tipoVehiculo">
-    <option value="auto">Auto (12 km/l)</option>
-    <option value="camioneta">Camioneta (8 km/l)</option>
-    <option value="moto">Moto (25 km/l)</option>
-    <option value="camion">Camión (4 km/l)</option>
-  </select>
-</div>
+  <script>
+    // Global maps variables
+    let map;
+    let activeMarkers = [];
+    let activePolylines = [];
+    let directionsService;
+    let directionsRenderer;
+    let selectedOrigen = null;
+    let selectedDestino = null;
 
-<div id="horarioPanel">
-  <label for="horario">Horario:</label>
-  <select id="horario">
-    <option value="dia">Día (más tráfico)</option>
-    <option value="noche">Noche (menos tráfico)</option>
-  </select>
-</div>
+    // Cities coordinates lookup injected from Python
+    const citiesCoordinates = {{ cities_data | tojson | safe }};
 
-<script>
-  let map, origen = null, destino = null, marcadores = [];
-  let directionsService, directionsRenderer;
+    // Google Maps Custom Dark Style JSON (Midnight theme)
+    const mapStyleDark = [
+      { elementType: "geometry", stylers: [{ color: "#0f172a" }] }, // Slate-900
+      { elementType: "labels.text.stroke", stylers: [{ color: "#0f172a" }] },
+      { elementType: "labels.text.fill", stylers: [{ color: "#475569" }] }, // Slate-600
+      {
+        featureType: "administrative.locality",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#94a3b8" }], // Slate-400
+      },
+      {
+        featureType: "poi",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#475569" }],
+      },
+      {
+        featureType: "poi.park",
+        elementType: "geometry",
+        stylers: [{ color: "#1e293b" }], // Slate-800
+      },
+      {
+        featureType: "road",
+        elementType: "geometry",
+        stylers: [{ color: "#1e293b" }],
+      },
+      {
+        featureType: "road",
+        elementType: "geometry.stroke",
+        stylers: [{ color: "#0f172a" }],
+      },
+      {
+        featureType: "road",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#64748b" }],
+      },
+      {
+        featureType: "road.highway",
+        elementType: "geometry",
+        stylers: [{ color: "#334155" }], // Slate-700
+      },
+      {
+        featureType: "road.highway",
+        elementType: "geometry.stroke",
+        stylers: [{ color: "#020617" }], // Slate-950
+      },
+      {
+        featureType: "road.highway",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#94a3b8" }],
+      },
+      {
+        featureType: "transit",
+        elementType: "geometry",
+        stylers: [{ color: "#1e293b" }],
+      },
+      {
+        featureType: "transit.station",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#94a3b8" }],
+      },
+      {
+        featureType: "water",
+        elementType: "geometry",
+        stylers: [{ color: "#020617" }],
+      },
+      {
+        featureType: "water",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#475569" }],
+      },
+      {
+        featureType: "water",
+        elementType: "labels.text.stroke",
+        stylers: [{ color: "#020617" }],
+      },
+    ];
 
-  function obtenerRendimientoPorVehiculo() {
-    const tipo = document.getElementById("tipoVehiculo").value;
-    switch (tipo) {
-      case "auto": return 12;
-      case "camioneta": return 8;
-      case "moto": return 25;
-      case "camion": return 4;
-      default: return 12;
+    // Initialize Map
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 20.80, lng: -99.80 }, // Center focused on central Mexico
+        zoom: 6,
+        // styles: mapStyleDark,
+        disableDefaultUI: false,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true
+      });
+
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer({
+        map: map,
+        suppressMarkers: true,
+        suppressPolylines: true
+      });
+
+      // Plot all available cities as small structural background markers
+      plotCityNetwork();
+
+      // Initialize Autocomplete text search fields
+      initAutocomplete();
     }
-  }
 
-  function initMap() {
-    map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 23.6345, lng: -102.5528 },
-      zoom: 5,
-      mapTypeControl: false,
-      streetViewControl: false,
+    // Draw cities dots to represent the offline database graph structure on the map
+    function plotCityNetwork() {
+      for (const [cityName, data] of Object.entries(citiesCoordinates)) {
+        const position = { lat: data.lat, lng: data.lon };
+
+        const cityDot = new google.maps.Marker({
+          position: position,
+          map: map,
+          title: cityName,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 4,
+            fillColor: "#334155",
+            fillOpacity: 0.7,
+            strokeColor: "#475569",
+            strokeWeight: 1,
+          }
+        });
+
+        // Popup showing city name
+        const infoWindow = new google.maps.InfoWindow({
+          content: `<div style="color:#0f172a; font-family:'Inter'; font-size:12px; font-weight:600; padding:2px;">${cityName}</div>`
+        });
+
+        cityDot.addListener("click", () => {
+          infoWindow.open(map, cityDot);
+          setTimeout(() => infoWindow.close(), 2500);
+        });
+      }
+    }
+
+    // Subtly update values on sliders
+    document.getElementById("hour").addEventListener("input", (e) => {
+      document.getElementById("hour-val").innerText = `${e.target.value.padStart(2, '0')}:00 hrs`;
     });
 
-    directionsService = new google.maps.DirectionsService();
-    directionsRenderer = new google.maps.DirectionsRenderer({ map, suppressMarkers: true });
+    document.getElementById("weight-fuel").addEventListener("input", (e) => {
+      document.getElementById("weight-fuel-val").innerText = `${parseFloat(e.target.value).toFixed(1)}x`;
+    });
 
-    map.addListener("click", (e) => {
-      if (!origen) {
-        origen = e.latLng;
-        agregarMarcador(origen, "A");
-        document.getElementById("search-origen").value = "";
-      } else if (!destino) {
-        destino = e.latLng;
-        agregarMarcador(destino, "B");
-        document.getElementById("search-destino").value = "";
-        calcularRuta(origen, destino);
+    document.getElementById("weight-toll").addEventListener("input", (e) => {
+      document.getElementById("weight-toll-val").innerText = `${parseFloat(e.target.value).toFixed(1)}x`;
+    });
+
+    document.getElementById("fuel-price").addEventListener("input", (e) => {
+      document.getElementById("fuel-price-val").innerText = `$${parseFloat(e.target.value).toFixed(2)} MXN/L`;
+    });
+
+    // Initialize Autocomplete using Google Places API
+    function initAutocomplete() {
+      const options = {
+        componentRestrictions: { country: "mx" },
+        fields: ["geometry", "formatted_address", "name"]
+      };
+
+      const inputOrigen = document.getElementById("origen-input");
+      const inputDestino = document.getElementById("destino-input");
+
+      const autocompleteOrigen = new google.maps.places.Autocomplete(inputOrigen, options);
+      const autocompleteDestino = new google.maps.places.Autocomplete(inputDestino, options);
+
+      autocompleteOrigen.addListener("place_changed", () => {
+        const place = autocompleteOrigen.getPlace();
+        if (place.geometry) {
+          selectedOrigen = {
+            name: place.name || place.formatted_address,
+            lat: place.geometry.location.lat(),
+            lon: place.geometry.location.lng()
+          };
+        }
+      });
+
+      autocompleteDestino.addListener("place_changed", () => {
+        const place = autocompleteDestino.getPlace();
+        if (place.geometry) {
+          selectedDestino = {
+            name: place.name || place.formatted_address,
+            lat: place.geometry.location.lat(),
+            lon: place.geometry.location.lng()
+          };
+        }
+      });
+    }
+
+    // Promise-based Geocoder fallback
+    async function geocodeAddress(address) {
+      const geocoder = new google.maps.Geocoder();
+      return new Promise((resolve, reject) => {
+        geocoder.geocode({ address: address, componentRestrictions: { country: "mx" } }, (results, status) => {
+          if (status === "OK" && results[0]) {
+            resolve({
+              name: results[0].name || results[0].formatted_address,
+              lat: results[0].geometry.location.lat(),
+              lon: results[0].geometry.location.lng()
+            });
+          } else {
+            reject("No se pudo encontrar la ubicación: " + address);
+          }
+        });
+      });
+    }
+
+    // Form submit to optimize route
+    document.getElementById("route-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const origName = document.getElementById("origen-input").value;
+      const destName = document.getElementById("destino-input").value;
+
+      if (origName === destName) {
+        showError("El origen y el destino no pueden ser idénticos.");
+        return;
+      }
+
+      const submitBtn = document.getElementById("btn-submit");
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<i class="animate-spin" data-lucide="loader-2"></i> Calculando...`;
+      lucide.createIcons();
+
+      hideError();
+
+      try {
+        // Ensure we have coordinates for origin
+        if (!selectedOrigen || selectedOrigen.name !== origName) {
+          selectedOrigen = await geocodeAddress(origName);
+        }
+        // Ensure we have coordinates for destination
+        if (!selectedDestino || selectedDestino.name !== destName) {
+          selectedDestino = await geocodeAddress(destName);
+        }
+      } catch (err) {
+        showError(err || "No se pudieron obtener las coordenadas de las ubicaciones.");
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i data-lucide="navigation"></i> Optimizar Ruta Dinámica`;
+        lucide.createIcons();
+        return;
+      }
+
+      const payload = {
+        origen_name: selectedOrigen.name,
+        origen_lat: selectedOrigen.lat,
+        origen_lon: selectedOrigen.lon,
+        destino_name: selectedDestino.name,
+        destino_lat: selectedDestino.lat,
+        destino_lon: selectedDestino.lon,
+        fuel_efficiency: parseFloat(document.getElementById("vehiculo").value),
+        hour: parseInt(document.getElementById("hour").value),
+        day: parseInt(document.getElementById("day").value),
+        is_holiday: document.getElementById("holiday").checked,
+        fuel_weight: parseFloat(document.getElementById("weight-fuel").value),
+        toll_weight: parseFloat(document.getElementById("weight-toll").value),
+        fuel_price: parseFloat(document.getElementById("fuel-price").value)
+      };
+
+      try {
+        const response = await fetch("/get_routes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          showError(data.error || "Ocurrió un error al calcular la ruta.");
+        } else {
+          renderRouteResults(data);
+        }
+      } catch (err) {
+        showError("No se pudo conectar con el servidor backend de optimización.");
+        console.error(err);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i data-lucide="navigation"></i> Optimizar Ruta Dinámica`;
+        lucide.createIcons();
       }
     });
 
-    const opcionesAutocomplete = {
-      fields: ["geometry", "name"],
-      componentRestrictions: { country: "mx" }
-    };
+    // Reset/Clear map and forms
+    document.getElementById("btn-clear").addEventListener("click", () => {
+      document.getElementById("route-form").reset();
+      selectedOrigen = null;
+      selectedDestino = null;
+      document.getElementById("hour-val").innerText = "12:00 hrs";
+      document.getElementById("weight-fuel-val").innerText = "1.0x";
+      document.getElementById("weight-toll-val").innerText = "1.0x";
+      document.getElementById("fuel-price-val").innerText = "$24.50 MXN/L";
 
-    const inputOrigen = document.getElementById("search-origen");
-    const inputDestino = document.getElementById("search-destino");
+      // Hide results panel and button
+      document.getElementById("results-panel").style.display = "none";
+      document.getElementById("btn-clear").style.display = "none";
+      hideError();
 
-    const autocompleteOrigen = new google.maps.places.Autocomplete(inputOrigen, opcionesAutocomplete);
-    const autocompleteDestino = new google.maps.places.Autocomplete(inputDestino, opcionesAutocomplete);
+      // Clear active map layers
+      clearMapLayers();
 
-    map.addListener('bounds_changed', () => {
-      const bounds = map.getBounds();
-      autocompleteOrigen.setBounds(bounds);
-      autocompleteDestino.setBounds(bounds);
+      // Zoom back
+      map.setZoom(6);
+      map.panTo({ lat: 20.80, lng: -99.80 });
     });
 
-    autocompleteOrigen.addListener("place_changed", () => {
-      const place = autocompleteOrigen.getPlace();
-      if (!place.geometry) return alert("No se encontró el lugar de origen.");
-      origen = place.geometry.location;
-      eliminarMarcador("A");
-      agregarMarcador(origen, "A");
-      map.panTo(origen);
-    });
-
-    autocompleteDestino.addListener("place_changed", () => {
-      const place = autocompleteDestino.getPlace();
-      if (!place.geometry) return alert("No se encontró el lugar de destino.");
-      destino = place.geometry.location;
-      eliminarMarcador("B");
-      agregarMarcador(destino, "B");
-      map.panTo(destino);
-    });
-
-    document.getElementById("btn-buscar").addEventListener("click", () => {
-      if (!origen || !destino) return alert("Selecciona origen y destino.");
-      calcularRuta(origen, destino);
-    });
-
-    document.getElementById("btn-clear").onclick = limpiarMapa;
-    document.getElementById("btn-close").onclick = () => document.getElementById("infoWindow").style.display = "none";
-
-    document.getElementById("tipoVehiculo").addEventListener("change", () => {
-      if (origen && destino) calcularRuta(origen, destino);
-    });
-    document.getElementById("horario").addEventListener("change", () => {
-      if (origen && destino) calcularRuta(origen, destino);
-    });
-  }
-
-  function agregarMarcador(posicion, label) {
-    eliminarMarcador(label);
-    const marcador = new google.maps.Marker({ position: posicion, map: map, label });
-    marcadores.push(marcador);
-  }
-
-  function eliminarMarcador(label) {
-    for (let i = marcadores.length - 1; i >= 0; i--) {
-      if (marcadores[i].label === label) {
-        marcadores[i].setMap(null);
-        marcadores.splice(i, 1);
+    function clearMapLayers() {
+      activeMarkers.forEach(m => m.setMap(null));
+      activeMarkers = [];
+      activePolylines.forEach(p => p.setMap(null));
+      activePolylines = [];
+      if (directionsRenderer) {
+        directionsRenderer.setDirections({ routes: [] });
       }
     }
-  }
 
-  function updateResultado(html) {
-    document.getElementById("resultado").innerHTML = html;
-  }
+    function showError(msg) {
+      const errorCard = document.getElementById("error-card");
+      const errorText = document.getElementById("error-text");
+      errorText.innerText = msg;
+      errorCard.style.display = "flex";
+      document.getElementById("results-panel").style.display = "none";
+    }
 
-  async function calcularRuta(origen, destino) {
-    directionsService.route(
-      { origin: origen, destination: destino, travelMode: google.maps.TravelMode.DRIVING },
-      (result, status) => {
+    function hideError() {
+      document.getElementById("error-card").style.display = "none";
+    }
+
+    // Display results, animate stats, render map route
+    function renderRouteResults(data) {
+      document.getElementById("results-panel").style.display = "flex";
+      document.getElementById("btn-clear").style.display = "flex";
+
+      // Animated count up for numerical cost values
+      animateValue("res-dist", 0, data.distance, " km", 0);
+      animateValue("res-gas", 0, data.fuel_cost, " MXN", 2, "$");
+      animateValue("res-breakdown-fuel", 0, data.fuel_cost, " MXN", 2, "$");
+      animateValue("res-breakdown-tolls", 0, data.toll_cost, " MXN", 2, "$");
+      animateValue("res-total", 0, data.total_cost, " MXN", 2, "$");
+
+      // Incident Risk rendering
+      const riskPercentage = (data.risk_score * 100).toFixed(1);
+      document.getElementById("res-risk-percentage").innerText = `${riskPercentage}%`;
+
+      const riskBar = document.getElementById("res-risk-bar");
+      riskBar.style.width = `${riskPercentage}%`;
+
+      const riskStatus = document.getElementById("res-risk-status");
+      if (data.risk_score > 0.4) {
+        riskStatus.innerText = "Riesgo Crítico";
+        riskStatus.style.color = "var(--accent-red)";
+        riskBar.style.backgroundColor = "var(--accent-red)";
+      } else if (data.risk_score > 0.2) {
+        riskStatus.innerText = "Riesgo Moderado";
+        riskStatus.style.color = "var(--accent-yellow)";
+        riskBar.style.backgroundColor = "var(--accent-yellow)";
+      } else {
+        riskStatus.innerText = "Riesgo Bajo";
+        riskStatus.style.color = "var(--primary)";
+        riskBar.style.backgroundColor = "var(--primary)";
+      }
+
+      // Build Step-by-Step itinerary timeline
+      const timeline = document.getElementById("res-timeline");
+      timeline.innerHTML = "";
+      data.path.forEach((city, index) => {
+        const node = document.createElement("div");
+        node.className = "timeline-node";
+        if (index === 0) node.classList.add("first", "active-city");
+        else if (index === data.path.length - 1) node.classList.add("last", "active-city");
+        else node.classList.add("active-city");
+
+        node.innerText = city;
+        timeline.appendChild(node);
+      });
+
+      // Render route on map
+      drawRouteOnMap(data.path, data.coordenadas_ruta, data.segment_risks);
+    }
+
+    // Polyline routing via actual roads on Google Maps using DirectionsService
+    function drawRouteOnMap(path, coordinates, segmentRisks) {
+      clearMapLayers();
+
+      if (path.length < 2 || !coordinates || coordinates.length < 2) return;
+
+      // Get coordinates from the response payload directly
+      const startCoord = coordinates[0];
+      const endCoord = coordinates[coordinates.length - 1];
+
+      const waypoints = [];
+      for (let i = 1; i < path.length - 1; i++) {
+        const coord = coordinates[i];
+        waypoints.push({
+          location: new google.maps.LatLng(coord[0], coord[1]),
+          stopover: true
+        });
+      }
+
+      directionsService.route({
+        origin: new google.maps.LatLng(startCoord[0], startCoord[1]),
+        destination: new google.maps.LatLng(endCoord[0], endCoord[1]),
+        waypoints: waypoints,
+        optimizeWaypoints: false, // Maintain the sequence calculated by A*
+        travelMode: google.maps.TravelMode.DRIVING,
+        avoidFerries: true // Avoid crossing the sea by ferry
+      }, (result, status) => {
         if (status === "OK") {
           directionsRenderer.setDirections(result);
-          const leg = result.routes[0].legs[0];
 
-          const distanciaKm = parseFloat(leg.distance.text.replace(",", "").replace(" km", ""));
-          let duracionSegundos = leg.duration.value;
+          // Draw individual segments in different colors depending on risk
+          const legs = result.routes[0].legs;
+          legs.forEach((leg, index) => {
+            let legPoints = [];
+            leg.steps.forEach(step => {
+              legPoints = legPoints.concat(step.path);
+            });
 
-          const horario = document.getElementById("horario").value;
-          duracionSegundos *= (horario === "dia") ? 1.3 : 0.8;
+            // Determine risk color: > 0.20 is High Risk (Red), otherwise Low Risk (Emerald Green)
+            const segmentRisk = segmentRisks && segmentRisks[index] !== undefined ? segmentRisks[index] : 0.05;
+            const strokeColor = segmentRisk > 0.20 ? "#ef4444" : "#10b981";
 
-          const horas = Math.floor(duracionSegundos / 3600);
-          const minutos = Math.round((duracionSegundos % 3600) / 60);
-          const duracionAjustada = `${horas > 0 ? horas + "h " : ""}${minutos}min`;
-
-          const rendimiento = obtenerRendimientoPorVehiculo();
-          const litros = distanciaKm / rendimiento;
-          const gastoGas = litros * 24;
-
-          document.getElementById("resultado").innerHTML = `
-            <p>Distancia: ${distanciaKm.toFixed(2)} km</p>
-            <p>Duración estimada (${horario}): ${duracionAjustada}</p>
-            <p>Gasolina: ${litros.toFixed(2)} L ($${gastoGas.toFixed(2)} MXN)</p>
-            <p><strong>Gasto total estimado: $${gastoGas.toFixed(2)} MXN</strong></p>
-          `;
-
-          const instruccionesDiv = document.getElementById("instrucciones");
-          instruccionesDiv.innerHTML = "";
-          leg.steps.forEach((step, index) => {
-            const div = document.createElement("div");
-            div.style.marginBottom = "8px";
-            div.innerHTML = `${index + 1}. ${step.instructions}`;
-            instruccionesDiv.appendChild(div);
+            const polyline = new google.maps.Polyline({
+              path: legPoints,
+              geodesic: true,
+              strokeColor: strokeColor,
+              strokeOpacity: 0.9,
+              strokeWeight: 6,
+              map: map
+            });
+            activePolylines.push(polyline);
           });
+
+          // Place custom premium markers for each city on the path
+          path.forEach((cityName, index) => {
+            const coord = coordinates[index];
+            const position = { lat: coord[0], lng: coord[1] };
+
+            let markerIcon;
+
+            if (index === 0) {
+              // Neon green pin for origin
+              markerIcon = {
+                path: 'M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z M 0,-30 A 4,4 0 1,0 0,-38 A 4,4 0 1,0 0,-30 z',
+                fillColor: "#10b981",
+                fillOpacity: 1,
+                strokeColor: "#ffffff",
+                strokeWeight: 1.5,
+                scale: 1,
+                labelOrigin: new google.maps.Point(0, -48)
+              };
+            } else if (index === path.length - 1) {
+              // Neon red pin for destination
+              markerIcon = {
+                path: 'M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z M 0,-30 A 4,4 0 1,0 0,-38 A 4,4 0 1,0 0,-30 z',
+                fillColor: "#ef4444",
+                fillOpacity: 1,
+                strokeColor: "#ffffff",
+                strokeWeight: 1.5,
+                scale: 1,
+                labelOrigin: new google.maps.Point(0, -48)
+              };
+            } else {
+              // Subtle intermediate city dot
+              markerIcon = {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 6,
+                fillColor: "#10b981",
+                fillOpacity: 0.9,
+                strokeColor: "#ffffff",
+                strokeWeight: 1.5,
+              };
+            }
+
+            const marker = new google.maps.Marker({
+              position: position,
+              map: map,
+              icon: markerIcon,
+              label: {
+                text: cityName,
+                color: "#f8fafc",
+                fontSize: "11px",
+                fontWeight: "700",
+                fontFamily: "Inter"
+              },
+              zIndex: index === 0 || index === path.length - 1 ? 999 : 100
+            });
+
+            activeMarkers.push(marker);
+          });
+
         } else {
-          alert("No se pudo calcular la ruta: " + status);
+          console.error("Directions request failed: " + status);
+          // Fallback: draw straight lines if DirectionsService fails
+          drawStraightLinesFallback(path, coordinates, segmentRisks);
+        }
+      });
+    }
+
+    // Fallback drawing using straight polylines in case Google Directions Service fails
+    function drawStraightLinesFallback(path, coordinates, segmentRisks) {
+      const bounds = new google.maps.LatLngBounds();
+
+      for (let i = 0; i < coordinates.length - 1; i++) {
+        const start = new google.maps.LatLng(coordinates[i][0], coordinates[i][1]);
+        const end = new google.maps.LatLng(coordinates[i + 1][0], coordinates[i + 1][1]);
+        bounds.extend(start);
+        bounds.extend(end);
+
+        const segmentRisk = segmentRisks && segmentRisks[i] !== undefined ? segmentRisks[i] : 0.05;
+        const strokeColor = segmentRisk > 0.20 ? "#ef4444" : "#10b981";
+
+        const line = new google.maps.Polyline({
+          path: [start, end],
+          geodesic: true,
+          strokeColor: strokeColor,
+          strokeOpacity: 0.9,
+          strokeWeight: 5,
+          map: map
+        });
+        activePolylines.push(line);
+      }
+      map.fitBounds(bounds);
+    }
+
+
+    // Utility to animate count-up stats for premium design feel
+    function animateValue(id, start, end, suffix = "", decimals = 0, prefix = "") {
+      const obj = document.getElementById(id);
+      if (!obj) return;
+
+      const range = end - start;
+      if (range === 0) {
+        obj.innerHTML = prefix + end.toFixed(decimals) + suffix;
+        return;
+      }
+
+      const duration = 800; // Animation length ms
+      let startTime = null;
+
+      function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const progress = Math.min((timestamp - startTime) / duration, 1);
+        const currentVal = start + progress * range;
+        obj.innerHTML = prefix + currentVal.toLocaleString('en-US', {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals
+        }) + suffix;
+
+        if (progress < 1) {
+          window.requestAnimationFrame(step);
         }
       }
-    );
-  }
+      window.requestAnimationFrame(step);
+    }
 
-  function limpiarMapa() {
-    for (const marcador of marcadores) marcador.setMap(null);
-    marcadores = [];
-    if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
-    origen = null; destino = null;
-    updateResultado("Haz clic en el mapa para elegir origen y destino.");
-    document.getElementById("instrucciones").innerHTML = "";
-    document.getElementById("search-origen").value = "";
-    document.getElementById("search-destino").value = "";
-  }
+    // Load icons
+    window.addEventListener('load', () => {
+      lucide.createIcons();
+    });
+  </script>
 
-  window.initMap = initMap;
-</script>
-
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyATseXRXJunPtS9HPA9RtoKSLbHJpRXqR8&libraries=places&callback=initMap" async defer></script>
+  <!-- Google Maps JavaScript API with Places and Callback -->
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyATseXRXJunPtS9HPA9RtoKSLbHJpRXqR8&libraries=places&callback=initMap"
+    async defer></script>
 
 </body>
+
 </html>
