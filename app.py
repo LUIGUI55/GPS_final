@@ -28,8 +28,6 @@ CITIES = {
     'Tijuana': {'lat': 32.5149, 'lon': -117.0382},
     'Hermosillo': {'lat': 29.0729, 'lon': -110.9559},
     'Mazatlan': {'lat': 23.2494, 'lon': -106.4111},
-    'Coatzacoalcos': {'lat': 18.1384, 'lon': -94.4533},
-    'Villahermosa': {'lat': 17.9895, 'lon': -92.9475},
 }
 
 HIGHWAYS = [
@@ -53,10 +51,6 @@ HIGHWAYS = [
     ('Tijuana', 'Hermosillo', 800, 180),
     ('Hermosillo', 'Mazatlan', 850, 450),
     ('Mazatlan', 'Guadalajara', 480, 700),
-    ('Puebla', 'Coatzacoalcos', 460, 320),
-    ('Veracruz', 'Coatzacoalcos', 310, 200),
-    ('Oaxaca', 'Coatzacoalcos', 370, 180),
-    ('Coatzacoalcos', 'Villahermosa', 170, 100),
 ]
 
 # Build adjacency list
@@ -185,15 +179,16 @@ class SafeIncidentPredictor:
 
 predictor = SafeIncidentPredictor()
 
-def manhattan_heuristic(node, goal):
+def euclidean_heuristic(node, goal):
     """
-    Calculates Manhattan distance between two cities, scaled to approximate kilometers (111km per degree)
+    Calculates Euclidean distance between two cities, scaled to approximate kilometers (111km per degree)
+    This is strictly admissible and guarantees finding the optimal path.
     """
     node_coords = CITIES[node]
     goal_coords = CITIES[goal]
-    lat_dist = abs(node_coords['lat'] - goal_coords['lat']) * 111
-    lon_dist = abs(node_coords['lon'] - goal_coords['lon']) * 111
-    return lat_dist + lon_dist
+    lat_dist = (node_coords['lat'] - goal_coords['lat']) * 111.0
+    lon_dist = (node_coords['lon'] - goal_coords['lon']) * 111.0
+    return math.sqrt(lat_dist**2 + lon_dist**2)
 
 def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_efficiency=12.0, fuel_price=24.50, toll_multiplier=1.0):
     """
@@ -205,7 +200,7 @@ def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_ef
 
     # Priority queue structure: 
     # (f_score, current_node, path, cumulative_dist, cumulative_fuel, cumulative_toll)
-    pq = [(manhattan_heuristic(start, goal), start, [start], 0, 0, 0)]
+    pq = [(euclidean_heuristic(start, goal), start, [start], 0, 0, 0)]
     visited = {}
 
     while pq:
@@ -235,7 +230,7 @@ def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_ef
             
             # Weighted g_score cost function
             g_score = new_dist + (new_fuel * fuel_weight) + (new_toll * toll_weight)
-            h_score = manhattan_heuristic(neighbor_name, goal)
+            h_score = euclidean_heuristic(neighbor_name, goal)
             f_score_new = g_score + h_score
             
             if neighbor_name not in visited or visited[neighbor_name] > f_score_new:
@@ -369,36 +364,32 @@ def get_routes():
             else:
                 g_path = list(result['path'])
                 
-                prune_start = False
-                prune_goal = False
-                
                 if start_node == goal_node:
                     # Bypass graph node completely
                     final_g_path = []
                 else:
-                    # Prune start_node if it's a detour
-                    if len(g_path) >= 2:
-                        n1 = g_path[1]
-                        dist_start_to_n1 = math.sqrt((s_lat - CITIES[n1]['lat'])**2 + (s_lon - CITIES[n1]['lon'])**2) * 111.0
-                        dist_node_to_n1 = math.sqrt((CITIES[start_node]['lat'] - CITIES[n1]['lat'])**2 + (CITIES[start_node]['lon'] - CITIES[n1]['lon'])**2) * 111.0
-                        if dist_start_to_n1 < dist_node_to_n1:
-                            prune_start = True
-                            
-                    # Prune goal_node if it's a detour
-                    if len(g_path) >= 2:
-                        n_penultimate = g_path[-2]
-                        dist_last_to_dest = math.sqrt((e_lat - CITIES[n_penultimate]['lat'])**2 + (e_lon - CITIES[n_penultimate]['lon'])**2) * 111.0
-                        dist_last_to_node = math.sqrt((CITIES[goal_node]['lat'] - CITIES[n_penultimate]['lat'])**2 + (CITIES[goal_node]['lon'] - CITIES[n_penultimate]['lon'])**2) * 111.0
-                        if dist_last_to_dest < dist_last_to_node:
-                            prune_goal = True
-                    
+                    # Smart Truncation and Detour Pruning from both ends
+                    # 1. Truncate from the end: stop path at any node if the destination is closer to that node than the next node in the path is.
                     final_g_path = []
-                    for idx, node in enumerate(g_path):
-                        if idx == 0 and prune_start:
-                            continue
-                        if idx == len(g_path) - 1 and prune_goal:
-                            continue
+                    for i, node in enumerate(g_path):
                         final_g_path.append(node)
+                        if i < len(g_path) - 1:
+                            next_node = g_path[i+1]
+                            dist_curr_to_dest = math.sqrt((e_lat - CITIES[node]['lat'])**2 + (e_lon - CITIES[node]['lon'])**2) * 111.0
+                            dist_curr_to_next = math.sqrt((CITIES[next_node]['lat'] - CITIES[node]['lat'])**2 + (CITIES[next_node]['lon'] - CITIES[node]['lon'])**2) * 111.0
+                            if dist_curr_to_dest < dist_curr_to_next:
+                                break
+                                
+                    # 2. Prune from the start: skip initial nodes if the start is closer to the second node than the first node is to the second node.
+                    while len(final_g_path) >= 2:
+                        n0 = final_g_path[0]
+                        n1 = final_g_path[1]
+                        dist_start_to_n1 = math.sqrt((s_lat - CITIES[n1]['lat'])**2 + (s_lon - CITIES[n1]['lon'])**2) * 111.0
+                        dist_n0_to_n1 = math.sqrt((CITIES[n0]['lat'] - CITIES[n1]['lat'])**2 + (CITIES[n0]['lon'] - CITIES[n1]['lon'])**2) * 111.0
+                        if dist_start_to_n1 < dist_n0_to_n1:
+                            final_g_path.pop(0)
+                        else:
+                            break
                 
                 # Recalculate distance and tolls based on final_g_path
                 total_distance = 0.0
