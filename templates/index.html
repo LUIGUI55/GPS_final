@@ -718,6 +718,19 @@
             </div>
           </div>
 
+          <!-- Paradas intermedias / Imprevistas -->
+          <div class="form-group" id="stops-section" style="display: flex; flex-direction: column; gap: 8px;">
+            <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <span>Paradas Imprevistas / Intermedias</span>
+              <button type="button" id="btn-add-stop" style="background: none; border: none; color: var(--primary); font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: color 0.2s;">
+                <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Agregar Parada
+              </button>
+            </label>
+            <div id="stops-list" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Dynamic stop fields will be appended here -->
+            </div>
+          </div>
+
           <!-- Collapsible Settings Panel -->
           <div
             style="display: flex; flex-direction: column; gap: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 14px; border-radius: 12px; margin-top: 4px;">
@@ -908,6 +921,7 @@
     let directionsRenderer;
     let selectedOrigen = null;
     let selectedDestino = null;
+    let stopsData = {}; // To store stop details: { stopId: { name, lat, lon } }
 
     // Cities coordinates lookup injected from Python
     const citiesCoordinates = {{ cities_data | tojson | safe }};
@@ -1014,6 +1028,9 @@
 
       // Initialize Autocomplete text search fields
       initAutocomplete();
+
+      // Setup dynamic stops handler
+      setupStopsHandler();
     }
 
     // Draw cities dots to represent the offline database graph structure on the map
@@ -1100,6 +1117,57 @@
       });
     }
 
+    // Setup intermediate stop functionality
+    function setupStopsHandler() {
+      const btnAddStop = document.getElementById("btn-add-stop");
+      const stopsList = document.getElementById("stops-list");
+
+      btnAddStop.addEventListener("click", () => {
+        const stopId = `stop-${Date.now()}`;
+        const stopItem = document.createElement("div");
+        stopItem.className = "stop-item";
+        stopItem.id = stopId;
+        stopItem.style.display = "flex";
+        stopItem.style.gap = "8px";
+        stopItem.style.alignItems = "center";
+
+        stopItem.innerHTML = `
+          <div style="flex-grow: 1; position: relative;">
+            <input type="text" class="stop-input" placeholder="Escribe una parada intermedia..." required
+              style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-size: 13px; outline: none; transition: border-color 0.3s ease;">
+          </div>
+          <button type="button" class="btn-remove-stop" style="background: none; border: none; color: var(--accent-red); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.7" onmouseout="this.style.opacity=1">
+            <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
+          </button>
+        `;
+
+        stopsList.appendChild(stopItem);
+        lucide.createIcons();
+
+        const inputElement = stopItem.querySelector(".stop-input");
+        const autocomplete = new google.maps.places.Autocomplete(inputElement, {
+          componentRestrictions: { country: "mx" },
+          fields: ["geometry", "formatted_address", "name"]
+        });
+
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace();
+          if (place.geometry) {
+            stopsData[stopId] = {
+              name: place.name || place.formatted_address,
+              lat: place.geometry.location.lat(),
+              lon: place.geometry.location.lng()
+            };
+          }
+        });
+
+        stopItem.querySelector(".btn-remove-stop").addEventListener("click", () => {
+          stopItem.remove();
+          delete stopsData[stopId];
+        });
+      });
+    }
+
     // Promise-based Geocoder fallback
     async function geocodeAddress(address) {
       const geocoder = new google.maps.Geocoder();
@@ -1154,6 +1222,30 @@
         return;
       }
 
+      // Ensure we have coordinates for all intermediate stops
+      const stopItems = document.querySelectorAll(".stop-item");
+      const stopsPayload = [];
+      for (const item of stopItems) {
+        const stopId = item.id;
+        const inputVal = item.querySelector(".stop-input").value.trim();
+        if (!inputVal) continue;
+        
+        let stopInfo = stopsData[stopId];
+        if (!stopInfo || stopInfo.name !== inputVal) {
+          try {
+            stopInfo = await geocodeAddress(inputVal);
+            stopsData[stopId] = stopInfo;
+          } catch (err) {
+            showError(`No se pudo encontrar la ubicación de la parada: "${inputVal}".`);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i data-lucide="navigation"></i> Optimizar Ruta Dinámica`;
+            lucide.createIcons();
+            return;
+          }
+        }
+        stopsPayload.push(stopInfo);
+      }
+
       const payload = {
         origen_name: selectedOrigen.name,
         origen_lat: selectedOrigen.lat,
@@ -1161,6 +1253,7 @@
         destino_name: selectedDestino.name,
         destino_lat: selectedDestino.lat,
         destino_lon: selectedDestino.lon,
+        stops: stopsPayload,
         fuel_efficiency: parseFloat(document.getElementById("vehiculo").value),
         hour: parseInt(document.getElementById("hour").value),
         day: parseInt(document.getElementById("day").value),
@@ -1199,6 +1292,8 @@
       document.getElementById("route-form").reset();
       selectedOrigen = null;
       selectedDestino = null;
+      stopsData = {};
+      document.getElementById("stops-list").innerHTML = ""; // Clear dynamic stops
       document.getElementById("hour-val").innerText = "12:00 hrs";
       document.getElementById("weight-fuel-val").innerText = "1.0x";
       document.getElementById("weight-toll-val").innerText = "1.0x";

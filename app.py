@@ -256,7 +256,8 @@ def find_closest_city(lat, lon):
 @app.route('/get_routes', methods=['POST'])
 def get_routes():
     """
-    Unified endpoint for path calculation supporting any location coordinates in Mexico
+    Unified endpoint for path calculation supporting any location coordinates in Mexico,
+    with support for optional intermediate stops (paradas imprevistas/intermedias).
     """
     data = request.get_json() or {}
     
@@ -267,6 +268,8 @@ def get_routes():
     destino_name = data.get('destino_name')
     destino_lat = data.get('destino_lat')
     destino_lon = data.get('destino_lon')
+
+    stops = data.get('stops', [])  # List of dicts: {'name': str, 'lat': float, 'lon': float}
 
     fuel_weight = float(data.get('fuel_weight', 1.0))
     toll_weight = float(data.get('toll_weight', 1.0))
@@ -283,95 +286,140 @@ def get_routes():
     if not origen_name or not destino_name or origen_lat is None or origen_lon is None or destino_lat is None or destino_lon is None:
         return jsonify({'error': 'Faltan parámetros de origen, destino o coordenadas.'}), 400
 
-    # If the search coordinates are extremely close, perform local direct pathfinding
-    coord_diff = abs(origen_lat - destino_lat) + abs(origen_lon - destino_lon)
-    if coord_diff < 0.8:
-        distance_km = math.sqrt((origen_lat - destino_lat)**2 + (origen_lon - destino_lon)**2) * 111.0
-        fuel_cost = (distance_km / fuel_efficiency) * fuel_price
-        toll_cost = 0.0
-        
-        path = [origen_name, destino_name]
-        coordenadas_ruta = [[origen_lat, origen_lon], [destino_lat, destino_lon]]
-        risk_score = 0.05
-        
-        return jsonify({
-            'path': path,
-            'distance': round(distance_km, 1),
-            'fuel_cost': round(fuel_cost, 2),
-            'toll_cost': round(toll_cost, 2),
-            'total_cost': round(fuel_cost + toll_cost, 2),
-            'risk_score': risk_score,
-            'coordenadas_ruta': coordenadas_ruta,
-            'segment_risks': [risk_score]
+    # Build sequence of all points
+    points = []
+    points.append({
+        'name': origen_name,
+        'lat': origen_lat,
+        'lon': origen_lon
+    })
+    for stop in stops:
+        points.append({
+            'name': stop.get('name'),
+            'lat': stop.get('lat'),
+            'lon': stop.get('lon')
         })
+    points.append({
+        'name': destino_name,
+        'lat': destino_lat,
+        'lon': destino_lon
+    })
 
-    # Otherwise, execute hybrid graph-embedding:
-    # 1. Embed origin/destination into closest nodes in the Mexico A* network
-    start_node = find_closest_city(origen_lat, origen_lon)
-    goal_node = find_closest_city(destino_lat, destino_lon)
+    segment_results = []
+    
+    for i in range(len(points) - 1):
+        p_start = points[i]
+        p_end = points[i+1]
+        
+        s_name = p_start['name']
+        s_lat = p_start['lat']
+        s_lon = p_start['lon']
+        
+        e_name = p_end['name']
+        e_lat = p_end['lat']
+        e_lon = p_end['lon']
+        
+        # If coordinates are very close, direct path:
+        coord_diff = abs(s_lat - e_lat) + abs(s_lon - e_lon)
+        if coord_diff < 0.8:
+            distance_km = math.sqrt((s_lat - e_lat)**2 + (s_lon - e_lon)**2) * 111.0
+            fuel_cost = (distance_km / fuel_efficiency) * fuel_price
+            
+            segment_results.append({
+                'path': [s_name, e_name],
+                'coords': [[s_lat, s_lon], [e_lat, e_lon]],
+                'distance': distance_km,
+                'fuel_cost': fuel_cost,
+                'toll_cost': 0.0
+            })
+        else:
+            # Embed into graph
+            start_node = find_closest_city(s_lat, s_lon)
+            goal_node = find_closest_city(e_lat, e_lon)
+            
+            result = calculate_route_astar(start_node, goal_node, fuel_weight, toll_weight, fuel_efficiency, fuel_price)
+            if not result:
+                # Fallback to direct path
+                distance_km = math.sqrt((s_lat - e_lat)**2 + (s_lon - e_lon)**2) * 111.0
+                fuel_cost = (distance_km / fuel_efficiency) * fuel_price
+                segment_results.append({
+                    'path': [s_name, e_name],
+                    'coords': [[s_lat, s_lon], [e_lat, e_lon]],
+                    'distance': distance_km,
+                    'fuel_cost': fuel_cost,
+                    'toll_cost': 0.0
+                })
+            else:
+                dist_entry = math.sqrt((s_lat - CITIES[start_node]['lat'])**2 + (s_lon - CITIES[start_node]['lon'])**2) * 111.0
+                dist_exit = math.sqrt((e_lat - CITIES[goal_node]['lat'])**2 + (e_lon - CITIES[goal_node]['lon'])**2) * 111.0
+                
+                total_distance = result['distance'] + dist_entry + dist_exit
+                total_fuel_cost = (total_distance / fuel_efficiency) * fuel_price
+                total_toll_cost = result['toll_cost']
+                
+                seg_path = []
+                seg_coords = []
+                
+                seg_path.append(s_name)
+                seg_coords.append([s_lat, s_lon])
+                
+                for node in result['path']:
+                    if node != s_name and node != e_name:
+                        seg_path.append(node)
+                        seg_coords.append([CITIES[node]['lat'], CITIES[node]['lon']])
+                        
+                if e_name not in seg_path:
+                    seg_path.append(e_name)
+                    seg_coords.append([e_lat, e_lon])
+                    
+                segment_results.append({
+                    'path': seg_path,
+                    'coords': seg_coords,
+                    'distance': total_distance,
+                    'fuel_cost': total_fuel_cost,
+                    'toll_cost': total_toll_cost
+                })
 
-    # 2. Run A* routing on the highway graph
-    result = calculate_route_astar(start_node, goal_node, fuel_weight, toll_weight, fuel_efficiency, fuel_price)
-    if not result:
-        # Fallback to direct path calculation if network routing fails
-        distance_km = math.sqrt((origen_lat - destino_lat)**2 + (origen_lon - destino_lon)**2) * 111.0
-        fuel_cost = (distance_km / fuel_efficiency) * fuel_price
-        return jsonify({
-            'path': [origen_name, destino_name],
-            'distance': round(distance_km, 1),
-            'fuel_cost': round(fuel_cost, 2),
-            'toll_cost': 0.0,
-            'total_cost': round(fuel_cost, 2),
-            'risk_score': 0.05,
-            'coordenadas_ruta': [[origen_lat, origen_lon], [destino_lat, destino_lon]],
-            'segment_risks': [0.05]
-        })
-
-    # 3. Add the entry and exit road segments
-    dist_entry = math.sqrt((origen_lat - CITIES[start_node]['lat'])**2 + (origen_lon - CITIES[start_node]['lon'])**2) * 111.0
-    dist_exit = math.sqrt((destino_lat - CITIES[goal_node]['lat'])**2 + (destino_lon - CITIES[goal_node]['lon'])**2) * 111.0
-
-    total_distance = result['distance'] + dist_entry + dist_exit
-    total_fuel_cost = (total_distance / fuel_efficiency) * fuel_price
-    total_toll_cost = result['toll_cost'] # assume tolls inside the highway network
-
-    # 4. Reconstruct clean itinerary path and coordinates
+    # Combine all segments
     final_path = []
     coordenadas_ruta = []
+    
+    total_distance = 0.0
+    total_fuel_cost = 0.0
+    total_toll_cost = 0.0
+    
+    for idx, seg in enumerate(segment_results):
+        total_distance += seg['distance']
+        total_fuel_cost += seg['fuel_cost']
+        total_toll_cost += seg['toll_cost']
+        
+        if idx == 0:
+            final_path.extend(seg['path'])
+            coordenadas_ruta.extend(seg['coords'])
+        else:
+            final_path.extend(seg['path'][1:])
+            coordenadas_ruta.extend(seg['coords'][1:])
 
-    final_path.append(origen_name)
-    coordenadas_ruta.append([origen_lat, origen_lon])
-
-    for node in result['path']:
-        # Avoid duplicate names if coordinates overlap
-        if node != origen_name and node != destino_name:
-            final_path.append(node)
-            coordenadas_ruta.append([CITIES[node]['lat'], CITIES[node]['lon']])
-
-    if destino_name not in final_path:
-        final_path.append(destino_name)
-        coordenadas_ruta.append([destino_lat, destino_lon])
-
-    # 5. Evaluate ML risk on all highway network segments and populate segment risks
+    # Calculate risks along combined path
     risks = []
     segment_risks = []
     
     for i in range(len(final_path) - 1):
         u, v = final_path[i], final_path[i+1]
-        if u == origen_name or v == destino_name:
-            # Entry / Exit road
-            risk = 0.05
+        
+        # Check if this edge is a highway edge
+        highway_name = f"{u}-{v}"
+        if highway_name not in HIGHWAY_MAP and f"{v}-{u}" in HIGHWAY_MAP:
+            highway_name = f"{v}-{u}"
+            
+        if highway_name in HIGHWAY_MAP:
+            risk = predictor.predict(highway_name, hour, day, is_holiday)
+            risks.append(risk)
         else:
-            highway_name = f"{u}-{v}"
-            if highway_name not in HIGHWAY_MAP and f"{v}-{u}" in HIGHWAY_MAP:
-                highway_name = f"{v}-{u}"
-            if highway_name in HIGHWAY_MAP:
-                risk = predictor.predict(highway_name, hour, day, is_holiday)
-                risks.append(risk)
-            else:
-                risk = 0.05
+            risk = 0.05
+            
         segment_risks.append(round(risk, 3))
-    
+        
     avg_risk = sum(risks) / len(risks) if risks else 0.05
 
     return jsonify({
