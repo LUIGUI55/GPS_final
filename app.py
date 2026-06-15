@@ -189,7 +189,7 @@ def manhattan_heuristic(node, goal):
     lon_dist = abs(node_coords['lon'] - goal_coords['lon']) * 111
     return lat_dist + lon_dist
 
-def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_efficiency=12.0, fuel_price=24.50):
+def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_efficiency=12.0, fuel_price=24.50, toll_multiplier=1.0):
     """
     A* algorithm to find optimal route.
     Cost = Distance + (Fuel_Cost * fuel_weight) + (Toll_Cost * toll_weight)
@@ -221,7 +221,7 @@ def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_ef
         for neighbor in GRAPH.get(current, []):
             neighbor_name = neighbor['to']
             edge_dist = neighbor['dist']
-            edge_toll = neighbor['toll']
+            edge_toll = neighbor['toll'] * toll_multiplier
             
             new_dist = dist + edge_dist
             new_fuel = fuel + (edge_dist / fuel_efficiency) * fuel_price
@@ -277,6 +277,17 @@ def get_routes():
     fuel_price = float(data.get('fuel_price', 24.50))
     # Enforce boundaries
     fuel_price = max(19.0, min(30.0, fuel_price))
+    
+    # Determine vehicle type and toll multiplier
+    vehicle_type = data.get('vehicle_type', 'auto')
+    if vehicle_type == 'moto':
+        toll_multiplier = 0.6
+    elif vehicle_type == 'camioneta':
+        toll_multiplier = 1.6
+    elif vehicle_type == 'camion':
+        toll_multiplier = 11.0
+    else:
+        toll_multiplier = 1.0
     
     # ML specific variables
     hour = int(data.get('hour', 12))
@@ -337,7 +348,7 @@ def get_routes():
             start_node = find_closest_city(s_lat, s_lon)
             goal_node = find_closest_city(e_lat, e_lon)
             
-            result = calculate_route_astar(start_node, goal_node, fuel_weight, toll_weight, fuel_efficiency, fuel_price)
+            result = calculate_route_astar(start_node, goal_node, fuel_weight, toll_weight, fuel_efficiency, fuel_price, toll_multiplier)
             if not result:
                 # Fallback to direct path
                 distance_km = math.sqrt((s_lat - e_lat)**2 + (s_lon - e_lon)**2) * 111.0
@@ -421,6 +432,8 @@ def get_routes():
         segment_risks.append(round(risk, 3))
         
     avg_risk = sum(risks) / len(risks) if risks else 0.05
+    
+    fuel_liters = round(total_distance / fuel_efficiency, 1)
 
     return jsonify({
         'path': final_path,
@@ -428,6 +441,7 @@ def get_routes():
         'fuel_cost': round(total_fuel_cost, 2),
         'toll_cost': round(total_toll_cost, 2),
         'total_cost': round(total_fuel_cost + total_toll_cost, 2),
+        'fuel_liters': fuel_liters,
         'risk_score': round(avg_risk, 3),
         'coordenadas_ruta': coordenadas_ruta,
         'segment_risks': segment_risks
