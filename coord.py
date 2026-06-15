@@ -70,18 +70,33 @@ def obtener_ciudades_intermedias(clave_api, ciudad_inicio, ciudad_final):
     if not coord_inicio or not coord_final:
         return None
 
-    ciudades = [ciudad_inicio, ciudad_final]
-    ciudades_intermedias = []
-
-    # Aquí puedes definir la lógica para obtener las ciudades intermedias,
-    # por ejemplo, haciendo múltiples búsquedas a lo largo del camino entre las dos ciudades.
-
-    # Placeholder para demostrar la idea:
-    ciudades_intermedias += ["Ciudad1", "Ciudad2", "Ciudad3"]  # Esta es solo una demostración
-
-    for ciudad in ciudades_intermedias:
-        ciudades.append(ciudad)
+    # Calculamos 3 puntos intermedios a lo largo de la línea recta
+    lat_diff = coord_final[0] - coord_inicio[0]
+    lon_diff = coord_final[1] - coord_inicio[1]
     
+    fractions = [0.25, 0.50, 0.75]
+    ciudades = [ciudad_inicio]
+    
+    # Buscamos ciudades reales cerca de cada punto intermedio usando Google Places API
+    for f in fractions:
+        lat = coord_inicio[0] + lat_diff * f
+        lon = coord_inicio[1] + lon_diff * f
+        
+        url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={lat},{lon}&radius=40000&type=locality&key={clave_api}"
+        try:
+            respuesta = requests.get(url)
+            datos = respuesta.json()
+            if datos.get('status') == 'OK' and len(datos.get('results', [])) > 0:
+                for result in datos['results']:
+                    name = result['name']
+                    if name not in ciudades and name != ciudad_final:
+                        ciudades.append(name)
+                        break
+        except Exception as e:
+            print(f"Error al buscar ciudades intermedias: {e}")
+
+    if ciudad_final not in ciudades:
+        ciudades.append(ciudad_final)
     return ciudades
 
 # Define tu clave API
