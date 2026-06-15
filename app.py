@@ -361,12 +361,65 @@ def get_routes():
                     'toll_cost': 0.0
                 })
             else:
-                dist_entry = math.sqrt((s_lat - CITIES[start_node]['lat'])**2 + (s_lon - CITIES[start_node]['lon'])**2) * 111.0
-                dist_exit = math.sqrt((e_lat - CITIES[goal_node]['lat'])**2 + (e_lon - CITIES[goal_node]['lon'])**2) * 111.0
+                g_path = list(result['path'])
                 
-                total_distance = result['distance'] + dist_entry + dist_exit
+                prune_start = False
+                prune_goal = False
+                
+                if start_node == goal_node:
+                    # Bypass graph node completely
+                    final_g_path = []
+                else:
+                    # Prune start_node if it's a detour
+                    if len(g_path) >= 2:
+                        n1 = g_path[1]
+                        dist_start_to_n1 = math.sqrt((s_lat - CITIES[n1]['lat'])**2 + (s_lon - CITIES[n1]['lon'])**2) * 111.0
+                        dist_node_to_n1 = math.sqrt((CITIES[start_node]['lat'] - CITIES[n1]['lat'])**2 + (CITIES[start_node]['lon'] - CITIES[n1]['lon'])**2) * 111.0
+                        if dist_start_to_n1 < dist_node_to_n1:
+                            prune_start = True
+                            
+                    # Prune goal_node if it's a detour
+                    if len(g_path) >= 2:
+                        n_penultimate = g_path[-2]
+                        dist_last_to_dest = math.sqrt((e_lat - CITIES[n_penultimate]['lat'])**2 + (e_lon - CITIES[n_penultimate]['lon'])**2) * 111.0
+                        dist_last_to_node = math.sqrt((CITIES[goal_node]['lat'] - CITIES[n_penultimate]['lat'])**2 + (CITIES[goal_node]['lon'] - CITIES[n_penultimate]['lon'])**2) * 111.0
+                        if dist_last_to_dest < dist_last_to_node:
+                            prune_goal = True
+                    
+                    final_g_path = []
+                    for idx, node in enumerate(g_path):
+                        if idx == 0 and prune_start:
+                            continue
+                        if idx == len(g_path) - 1 and prune_goal:
+                            continue
+                        final_g_path.append(node)
+                
+                # Recalculate distance and tolls based on final_g_path
+                total_distance = 0.0
+                total_toll_cost = 0.0
+                
+                for j in range(len(final_g_path) - 1):
+                    u, v = final_g_path[j], final_g_path[j+1]
+                    for edge in GRAPH[u]:
+                        if edge['to'] == v:
+                            total_distance += edge['dist']
+                            total_toll_cost += edge['toll'] * toll_multiplier
+                            break
+                            
+                if final_g_path:
+                    first_node = final_g_path[0]
+                    dist_entry = math.sqrt((s_lat - CITIES[first_node]['lat'])**2 + (s_lon - CITIES[first_node]['lon'])**2) * 111.0
+                    total_distance += dist_entry
+                    
+                    last_node = final_g_path[-1]
+                    dist_exit = math.sqrt((e_lat - CITIES[last_node]['lat'])**2 + (e_lon - CITIES[last_node]['lon'])**2) * 111.0
+                    total_distance += dist_exit
+                else:
+                    # If completely pruned, direct distance
+                    total_distance = math.sqrt((s_lat - e_lat)**2 + (s_lon - e_lon)**2) * 111.0
+                    total_toll_cost = 0.0
+                    
                 total_fuel_cost = (total_distance / fuel_efficiency) * fuel_price
-                total_toll_cost = result['toll_cost']
                 
                 seg_path = []
                 seg_coords = []
@@ -374,7 +427,7 @@ def get_routes():
                 seg_path.append(s_name)
                 seg_coords.append([s_lat, s_lon])
                 
-                for node in result['path']:
+                for node in final_g_path:
                     if node != s_name and node != e_name:
                         seg_path.append(node)
                         seg_coords.append([CITIES[node]['lat'], CITIES[node]['lon']])
