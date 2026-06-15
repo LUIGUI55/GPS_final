@@ -825,6 +825,15 @@
             <i data-lucide="navigation"></i> Optimizar Ruta Dinámica
           </button>
 
+          <div style="display: flex; gap: 8px; margin-top: 10px; margin-bottom: 6px;">
+            <button type="button" id="btn-add-risk-zone" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: var(--accent-red); padding: 10px 12px; border-radius: 8px; font-weight: 500; font-size: 12px; cursor: pointer; transition: all 0.2s;">
+              <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Agregar Zona Roja (Click)
+            </button>
+            <button type="button" id="btn-clear-risk-zones" style="display: none; align-items: center; justify-content: center; width: 40px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" title="Limpiar Zonas Creadas">
+              <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+            </button>
+          </div>
+
           <button type="button" class="btn-clear" id="btn-clear" style="display: none;">
             <i data-lucide="rotate-ccw"></i> Limpiar Todo
           </button>
@@ -985,6 +994,8 @@
     ];
 
     let riskZoneCircles = [];
+    let customRiskZoneCircles = [];
+    let isAddingRiskZone = false;
 
     // Google Maps Custom Dark Style JSON (Midnight theme)
     const mapStyleDark = [
@@ -1093,6 +1104,13 @@
 
       // Setup dynamic stops handler
       setupStopsHandler();
+
+      // Custom risk zones placement handler
+      map.addListener("click", (e) => {
+        if (isAddingRiskZone) {
+          addCustomRiskZone(e.latLng);
+        }
+      });
     }
 
     // Render risk zones as red circles on the map
@@ -1128,8 +1146,92 @@
       });
     }
 
+    // Add a user-defined custom risk zone (círculo rojo) at coordinates
+    function addCustomRiskZone(latLng) {
+      const radiusKmInput = prompt("Introduce el radio de la zona de riesgo en Kilómetros (ej. 30):", "30");
+      if (radiusKmInput === null) {
+        // User cancelled, reset button
+        resetAddRiskZoneMode();
+        return;
+      }
+      
+      let radiusMeters = parseFloat(radiusKmInput) * 1000.0;
+      if (isNaN(radiusMeters) || radiusMeters <= 0) {
+        radiusMeters = 30000.0; // Default 30km
+      }
 
+      const circle = new google.maps.Circle({
+        strokeColor: "#dc2626", // Darker red for custom zones
+        strokeOpacity: 0.85,
+        strokeWeight: 2,
+        fillColor: "#ef4444",
+        fillOpacity: 0.35,
+        map: map,
+        center: latLng,
+        radius: radiusMeters,
+        editable: true,
+        draggable: true
+      });
 
+      // InfoWindow for user-defined zone
+      const infoWindow = new google.maps.InfoWindow({
+        content: `
+          <div style="font-family: 'Inter', sans-serif; padding: 8px; max-width: 220px; color: #1e293b;">
+            <h4 style="margin: 0 0 6px 0; color: #dc2626; font-weight: 600; font-size: 14px;">🚨 Zona de Riesgo Creada</h4>
+            <p style="margin: 0; font-size: 12px; line-height: 1.4; color: #64748b;">
+              Esta área de carretera será evitada automáticamente al calcular la ruta óptima.
+              <br><small style="color:var(--primary); font-weight:500;">(Arrastra o redimensiona para ajustar)</small>
+            </p>
+          </div>
+        `
+      });
+
+      circle.addListener("click", (ev) => {
+        infoWindow.setPosition(ev.latLng);
+        infoWindow.open(map);
+      });
+
+      // Automatically recalculate route when center or radius changes
+      circle.addListener("center_changed", () => {
+        debouncedRecalculate();
+      });
+      circle.addListener("radius_changed", () => {
+        debouncedRecalculate();
+      });
+
+      customRiskZoneCircles.push(circle);
+      document.getElementById("btn-clear-risk-zones").style.display = "flex";
+      
+      resetAddRiskZoneMode();
+      
+      // Trigger route optimization automatically!
+      if (selectedOrigen && selectedDestino) {
+        document.getElementById("btn-submit").click();
+      }
+    }
+
+    // Debounce recalculation to prevent flooding the backend while dragging
+    let recalculateTimeout = null;
+    function debouncedRecalculate() {
+      if (recalculateTimeout) {
+        clearTimeout(recalculateTimeout);
+      }
+      recalculateTimeout = setTimeout(() => {
+        if (selectedOrigen && selectedDestino) {
+          document.getElementById("btn-submit").click();
+        }
+      }, 500); // 500ms debounce
+    }
+
+    function resetAddRiskZoneMode() {
+      isAddingRiskZone = false;
+      const btn = document.getElementById("btn-add-risk-zone");
+      btn.innerHTML = `<i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Agregar Zona Roja (Click)`;
+      btn.style.background = "rgba(239, 68, 68, 0.1)";
+      btn.style.borderColor = "rgba(239, 68, 68, 0.25)";
+      btn.style.color = "var(--accent-red)";
+      lucide.createIcons();
+    }
     // Subtly update values on sliders
     document.getElementById("hour").addEventListener("input", (e) => {
       document.getElementById("hour-val").innerText = `${e.target.value.padStart(2, '0')}:00 hrs`;
@@ -1152,6 +1254,32 @@
       riskZoneCircles.forEach(circle => {
         circle.setMap(show ? map : null);
       });
+    });
+
+    document.getElementById("btn-add-risk-zone").addEventListener("click", () => {
+      if (!map) return;
+      isAddingRiskZone = !isAddingRiskZone;
+      const btn = document.getElementById("btn-add-risk-zone");
+      if (isAddingRiskZone) {
+        btn.innerHTML = `<i data-lucide="loader" class="spin" style="width: 14px; height: 14px;"></i> Selecciona en el mapa...`;
+        btn.style.background = "var(--accent-red)";
+        btn.style.borderColor = "var(--accent-red)";
+        btn.style.color = "#ffffff";
+      } else {
+        resetAddRiskZoneMode();
+      }
+      lucide.createIcons();
+    });
+
+    document.getElementById("btn-clear-risk-zones").addEventListener("click", () => {
+      customRiskZoneCircles.forEach(circle => circle.setMap(null));
+      customRiskZoneCircles = [];
+      document.getElementById("btn-clear-risk-zones").style.display = "none";
+      resetAddRiskZoneMode();
+      // Recalculate route automatically!
+      if (selectedOrigen && selectedDestino) {
+        document.getElementById("btn-submit").click();
+      }
     });
 
     // Helper to check if a place result is inside Mexico
@@ -1361,6 +1489,25 @@
       const selectedOption = vehiculoSelect.options[vehiculoSelect.selectedIndex];
       const vehicleType = selectedOption.getAttribute("data-type") || "auto";
 
+      const avoidZonesPayload = [];
+      if (document.getElementById("toggle-risk-zones").checked) {
+        riskZones.forEach(z => {
+          avoidZonesPayload.push({
+            lat: z.lat,
+            lon: z.lon,
+            radius: z.radius
+          });
+        });
+      }
+      customRiskZoneCircles.forEach(circle => {
+        const center = circle.getCenter();
+        avoidZonesPayload.push({
+          lat: center.lat(),
+          lon: center.lng(),
+          radius: circle.getRadius()
+        });
+      });
+
       const payload = {
         origen_name: selectedOrigen.name,
         origen_lat: selectedOrigen.lat,
@@ -1369,6 +1516,7 @@
         destino_lat: selectedDestino.lat,
         destino_lon: selectedDestino.lon,
         stops: stopsPayload,
+        avoid_zones: avoidZonesPayload,
         fuel_efficiency: parseFloat(vehiculoSelect.value),
         vehicle_type: vehicleType,
         hour: parseInt(document.getElementById("hour").value),
@@ -1419,6 +1567,12 @@
       document.getElementById("results-panel").style.display = "none";
       document.getElementById("btn-clear").style.display = "none";
       hideError();
+
+      // Clear custom risk zones
+      customRiskZoneCircles.forEach(circle => circle.setMap(null));
+      customRiskZoneCircles = [];
+      document.getElementById("btn-clear-risk-zones").style.display = "none";
+      resetAddRiskZoneMode();
 
       // Clear active map layers
       clearMapLayers();

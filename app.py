@@ -179,6 +179,34 @@ class SafeIncidentPredictor:
 
 predictor = SafeIncidentPredictor()
 
+def is_segment_in_avoid_zone(lat1, lon1, lat2, lon2, zone):
+    """
+    Check if a line segment between (lat1, lon1) and (lat2, lon2) passes through 
+    a circular avoid zone defined by {'lat': float, 'lon': float, 'radius': float} (radius in meters)
+    """
+    z_lat = zone['lat']
+    z_lon = zone['lon']
+    z_rad_km = zone['radius'] / 1000.0
+    
+    # Flat-plane projection approximation for speed and simplicity
+    x1, y1 = lon1 * 111.0 * math.cos(math.radians(lat1)), lat1 * 111.0
+    x2, y2 = lon2 * 111.0 * math.cos(math.radians(lat2)), lat2 * 111.0
+    xc, yc = z_lon * 111.0 * math.cos(math.radians(z_lat)), z_lat * 111.0
+    
+    dx = x2 - x1
+    dy = y2 - y1
+    
+    if dx == 0 and dy == 0:
+        dist = math.sqrt((xc - x1)**2 + (yc - y1)**2)
+    else:
+        t = ((xc - x1) * dx + (yc - y1) * dy) / (dx**2 + dy**2)
+        t = max(0.0, min(1.0, t))
+        closest_x = x1 + t * dx
+        closest_y = y1 + t * dy
+        dist = math.sqrt((xc - closest_x)**2 + (yc - closest_y)**2)
+        
+    return dist < z_rad_km
+
 def euclidean_heuristic(node, goal):
     """
     Calculates Euclidean distance between two cities, scaled to approximate kilometers (111km per degree)
@@ -190,7 +218,7 @@ def euclidean_heuristic(node, goal):
     lon_dist = (node_coords['lon'] - goal_coords['lon']) * 111.0
     return math.sqrt(lat_dist**2 + lon_dist**2)
 
-def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_efficiency=12.0, fuel_price=24.50, toll_multiplier=1.0):
+def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_efficiency=12.0, fuel_price=24.50, toll_multiplier=1.0, avoid_zones=None):
     """
     A* algorithm to find optimal route.
     Cost = Distance + (Fuel_Cost * fuel_weight) + (Toll_Cost * toll_weight)
@@ -224,12 +252,20 @@ def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_ef
             edge_dist = neighbor['dist']
             edge_toll = neighbor['toll'] * toll_multiplier
             
+            avoid_penalty = 0.0
+            if avoid_zones:
+                lat1, lon1 = CITIES[current]['lat'], CITIES[current]['lon']
+                lat2, lon2 = CITIES[neighbor_name]['lat'], CITIES[neighbor_name]['lon']
+                for zone in avoid_zones:
+                    if is_segment_in_avoid_zone(lat1, lon1, lat2, lon2, zone):
+                        avoid_penalty += 20000.0  # Massive penalty to discourage routing here
+            
             new_dist = dist + edge_dist
             new_fuel = fuel + (edge_dist / fuel_efficiency) * fuel_price
             new_toll = toll + edge_toll
             
-            # Weighted g_score cost function
-            g_score = new_dist + (new_fuel * fuel_weight) + (new_toll * toll_weight)
+            # Weighted g_score cost function with avoid zone penalty
+            g_score = new_dist + (new_fuel * fuel_weight) + (new_toll * toll_weight) + avoid_penalty
             h_score = euclidean_heuristic(neighbor_name, goal)
             f_score_new = g_score + h_score
             
@@ -271,6 +307,7 @@ def get_routes():
     destino_lon = data.get('destino_lon')
 
     stops = data.get('stops', [])  # List of dicts: {'name': str, 'lat': float, 'lon': float}
+    avoid_zones = data.get('avoid_zones', [])  # List of dicts: {'lat': float, 'lon': float, 'radius': float}
 
     fuel_weight = float(data.get('fuel_weight', 1.0))
     toll_weight = float(data.get('toll_weight', 1.0))
@@ -349,7 +386,7 @@ def get_routes():
             start_node = find_closest_city(s_lat, s_lon)
             goal_node = find_closest_city(e_lat, e_lon)
             
-            result = calculate_route_astar(start_node, goal_node, fuel_weight, toll_weight, fuel_efficiency, fuel_price, toll_multiplier)
+            result = calculate_route_astar(start_node, goal_node, fuel_weight, toll_weight, fuel_efficiency, fuel_price, toll_multiplier, avoid_zones=avoid_zones)
             if not result:
                 # Fallback to direct path
                 distance_km = math.sqrt((s_lat - e_lat)**2 + (s_lon - e_lon)**2) * 111.0
