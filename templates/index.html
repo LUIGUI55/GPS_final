@@ -1435,51 +1435,60 @@
     }
 
     // Helper function to draw a single route segment along actual roads
+    // Helper function to draw a single route segment along actual roads with retry on OVER_QUERY_LIMIT
     async function drawSegment(startCoord, endCoord, segmentRisk) {
-      return new Promise((resolve) => {
-        directionsService.route({
-          origin: new google.maps.LatLng(startCoord[0], startCoord[1]),
-          destination: new google.maps.LatLng(endCoord[0], endCoord[1]),
-          travelMode: google.maps.TravelMode.DRIVING,
-          avoidFerries: true
-        }, (result, status) => {
-          if (status === "OK") {
-            let legPoints = [];
-            const leg = result.routes[0].legs[0];
-            leg.steps.forEach(step => {
-              legPoints = legPoints.concat(step.path);
-            });
+      const makeRequest = () => {
+        return new Promise((resolve) => {
+          directionsService.route({
+            origin: new google.maps.LatLng(startCoord[0], startCoord[1]),
+            destination: new google.maps.LatLng(endCoord[0], endCoord[1]),
+            travelMode: google.maps.TravelMode.DRIVING,
+            avoidFerries: true
+          }, (result, status) => {
+            if (status === "OK") {
+              let legPoints = [];
+              const leg = result.routes[0].legs[0];
+              leg.steps.forEach(step => {
+                legPoints = legPoints.concat(step.path);
+              });
 
-            const strokeColor = segmentRisk > 0.20 ? "#ef4444" : "#10b981";
-            const polyline = new google.maps.Polyline({
-              path: legPoints,
-              geodesic: true,
-              strokeColor: strokeColor,
-              strokeOpacity: 0.9,
-              strokeWeight: 6,
-              map: map
-            });
-            activePolylines.push(polyline);
-            resolve(true);
-          } else {
-            console.warn(`Directions segment failed: ${status}. Drawing straight line fallback.`);
-            // Fallback: draw straight line for this segment
-            const startLatLng = new google.maps.LatLng(startCoord[0], startCoord[1]);
-            const endLatLng = new google.maps.LatLng(endCoord[0], endCoord[1]);
-            const strokeColor = segmentRisk > 0.20 ? "#ef4444" : "#10b981";
-            const polyline = new google.maps.Polyline({
-              path: [startLatLng, endLatLng],
-              geodesic: true,
-              strokeColor: strokeColor,
-              strokeOpacity: 0.9,
-              strokeWeight: 6,
-              map: map
-            });
-            activePolylines.push(polyline);
-            resolve(false);
-          }
+              const strokeColor = segmentRisk > 0.20 ? "#ef4444" : "#10b981";
+              const polyline = new google.maps.Polyline({
+                path: legPoints,
+                geodesic: true,
+                strokeColor: strokeColor,
+                strokeOpacity: 0.9,
+                strokeWeight: 6,
+                map: map
+              });
+              activePolylines.push(polyline);
+              resolve(true);
+            } else if (status === "OVER_QUERY_LIMIT") {
+              // Rate limit hit: wait 300ms and retry
+              setTimeout(() => {
+                makeRequest().then(resolve);
+              }, 300);
+            } else {
+              console.warn(`Directions segment failed: ${status}. Drawing straight line fallback.`);
+              // Fallback: draw straight line for this segment
+              const startLatLng = new google.maps.LatLng(startCoord[0], startCoord[1]);
+              const endLatLng = new google.maps.LatLng(endCoord[0], endCoord[1]);
+              const strokeColor = segmentRisk > 0.20 ? "#ef4444" : "#10b981";
+              const polyline = new google.maps.Polyline({
+                path: [startLatLng, endLatLng],
+                geodesic: true,
+                strokeColor: strokeColor,
+                strokeOpacity: 0.9,
+                strokeWeight: 6,
+                map: map
+              });
+              activePolylines.push(polyline);
+              resolve(false);
+            }
+          });
         });
-      });
+      };
+      return makeRequest();
     }
 
     // Polyline routing via actual roads on Google Maps using DirectionsService
@@ -1496,16 +1505,13 @@
       });
       map.fitBounds(bounds);
 
-      // Draw each segment along actual roads asynchronously
-      const segmentPromises = [];
+      // Draw each segment sequentially to prevent OVER_QUERY_LIMIT errors
       for (let i = 0; i < coordinates.length - 1; i++) {
         const startCoord = coordinates[i];
         const endCoord = coordinates[i + 1];
         const segmentRisk = segmentRisks && segmentRisks[i] !== undefined ? segmentRisks[i] : 0.05;
-        segmentPromises.push(drawSegment(startCoord, endCoord, segmentRisk));
+        await drawSegment(startCoord, endCoord, segmentRisk);
       }
-
-      await Promise.all(segmentPromises);
 
       // Place custom premium markers for each city on the path
       path.forEach((cityName, index) => {

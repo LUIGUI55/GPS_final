@@ -28,6 +28,8 @@ CITIES = {
     'Tijuana': {'lat': 32.5149, 'lon': -117.0382},
     'Hermosillo': {'lat': 29.0729, 'lon': -110.9559},
     'Mazatlan': {'lat': 23.2494, 'lon': -106.4111},
+    'Coatzacoalcos': {'lat': 18.1384, 'lon': -94.4533},
+    'Villahermosa': {'lat': 17.9895, 'lon': -92.9475},
 }
 
 HIGHWAYS = [
@@ -51,6 +53,10 @@ HIGHWAYS = [
     ('Tijuana', 'Hermosillo', 800, 180),
     ('Hermosillo', 'Mazatlan', 850, 450),
     ('Mazatlan', 'Guadalajara', 480, 700),
+    ('Puebla', 'Coatzacoalcos', 460, 320),
+    ('Veracruz', 'Coatzacoalcos', 310, 200),
+    ('Oaxaca', 'Coatzacoalcos', 370, 180),
+    ('Coatzacoalcos', 'Villahermosa', 170, 100),
 ]
 
 # Build adjacency list
