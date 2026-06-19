@@ -9,48 +9,64 @@ app = Flask(__name__)
 
 # Graph of Mexican cities and highways from the lowercase 'gps' project
 CITIES = {
-    'CDMX': {'lat': 19.4326, 'lon': -99.1332},
-    'Queretaro': {'lat': 20.5888, 'lon': -100.3899},
+    'CDMX':        {'lat': 19.4326, 'lon': -99.1332},
+    'Queretaro':   {'lat': 20.5888, 'lon': -100.3899},
     'Guadalajara': {'lat': 20.6597, 'lon': -103.3496},
-    'Monterrey': {'lat': 25.6866, 'lon': -100.3161},
-    'Puebla': {'lat': 19.0413, 'lon': -98.2062},
-    'SLP': {'lat': 22.1565, 'lon': -100.9855},
-    'Leon': {'lat': 21.1227, 'lon': -101.6747},
-    'Toluca': {'lat': 19.2827, 'lon': -99.6557},
-    'Cuernavaca': {'lat': 18.9242, 'lon': -99.2216},
-    'Acapulco': {'lat': 16.8531, 'lon': -99.8237},
-    'Veracruz': {'lat': 19.1738, 'lon': -96.1342},
-    'Oaxaca': {'lat': 17.0732, 'lon': -96.7266},
-    'Morelia': {'lat': 19.7060, 'lon': -101.1950},
-    'Pachuca': {'lat': 20.1010, 'lon': -98.7591},
-    'Celaya': {'lat': 20.5223, 'lon': -100.8122},
-    'LaPaz': {'lat': 24.1426, 'lon': -110.3129},
-    'Tijuana': {'lat': 32.5149, 'lon': -117.0382},
-    'Hermosillo': {'lat': 29.0729, 'lon': -110.9559},
-    'Mazatlan': {'lat': 23.2494, 'lon': -106.4111},
+    'Monterrey':   {'lat': 25.6866, 'lon': -100.3161},
+    'Puebla':      {'lat': 19.0413, 'lon': -98.2062},
+    'SLP':         {'lat': 22.1565, 'lon': -100.9855},
+    'Leon':        {'lat': 21.1227, 'lon': -101.6747},
+    'Toluca':      {'lat': 19.2827, 'lon': -99.6557},
+    'Cuernavaca':  {'lat': 18.9242, 'lon': -99.2216},
+    'Acapulco':    {'lat': 16.8531, 'lon': -99.8237},
+    'Veracruz':    {'lat': 19.1738, 'lon': -96.1342},
+    'Oaxaca':      {'lat': 17.0732, 'lon': -96.7266},
+    'Morelia':     {'lat': 19.7060, 'lon': -101.1950},
+    'Pachuca':     {'lat': 20.1010, 'lon': -98.7591},
+    'Celaya':      {'lat': 20.5223, 'lon': -100.8122},
+    # Noroeste — solo ciudades con conexión TERRESTRE entre sí
+    # LaPaz eliminada: solo accesible por ferry (mar), no hay ruta terrestre a tierra firme
+    'Tijuana':     {'lat': 32.5149, 'lon': -117.0382},
+    'Mexicali':    {'lat': 32.6635, 'lon': -115.4683},  # Frontera tierra firme
+    'Nogales':     {'lat': 31.3236, 'lon': -110.9340},  # Sonora norte
+    'Hermosillo':  {'lat': 29.0729, 'lon': -110.9559},
+    'Culiacan':    {'lat': 24.7994, 'lon': -107.3894},  # Sinaloa, entre Hermosillo y Mazatlán
+    'Mazatlan':    {'lat': 23.2494, 'lon': -106.4111},
 }
 
 HIGHWAYS = [
-    ('CDMX', 'Queretaro', 211, 198),
-    ('CDMX', 'Puebla', 135, 184),
-    ('CDMX', 'Toluca', 65, 95),
-    ('CDMX', 'Pachuca', 95, 0),
-    ('CDMX', 'Cuernavaca', 90, 136),
-    ('Queretaro', 'SLP', 200, 170),
-    ('Queretaro', 'Leon', 170, 150),
-    ('Queretaro', 'Celaya', 50, 0),
-    ('SLP', 'Monterrey', 510, 350),
-    ('Leon', 'Guadalajara', 220, 280),
-    ('Cuernavaca', 'Acapulco', 290, 600),
-    ('Puebla', 'Veracruz', 280, 450),
-    ('Puebla', 'Oaxaca', 340, 200),
-    ('Guadalajara', 'Morelia', 290, 400),
-    ('Morelia', 'Toluca', 180, 250),
-    ('SLP', 'Leon', 180, 100),
-    ('LaPaz', 'Tijuana', 1430, 0),
-    ('Tijuana', 'Hermosillo', 800, 180),
-    ('Hermosillo', 'Mazatlan', 850, 450),
-    ('Mazatlan', 'Guadalajara', 480, 700),
+    # ── Centro / Bajío ──────────────────────────────────────────────────────
+    ('CDMX',       'Queretaro',   211, 198),
+    ('CDMX',       'Puebla',      135, 184),
+    ('CDMX',       'Toluca',       65,  95),
+    ('CDMX',       'Pachuca',      95,   0),
+    ('CDMX',       'Cuernavaca',   90, 136),
+    ('Queretaro',  'SLP',         200, 170),
+    ('Queretaro',  'Leon',        170, 150),
+    ('Queretaro',  'Celaya',       50,   0),
+    ('SLP',        'Monterrey',   510, 350),
+    ('Leon',       'Guadalajara', 220, 280),
+    ('Cuernavaca', 'Acapulco',    290, 600),
+    ('Puebla',     'Veracruz',    280, 450),
+    ('Puebla',     'Oaxaca',      340, 200),
+    ('Guadalajara','Morelia',     290, 400),
+    ('Morelia',    'Toluca',      180, 250),
+    ('SLP',        'Leon',        180, 100),
+    # ── Noroeste — rutas 100% terrestres ────────────────────────────────────
+    # Tijuana → Mexicali: Hwy 2D/Libramiento (195 km, todo tierra firme)
+    ('Tijuana',    'Mexicali',    195,  50),
+    # Mexicali → Nogales: Hwy 2 por Sonora (340 km, desierto sonorense)
+    ('Mexicali',   'Nogales',     340,   0),
+    # Nogales → Hermosillo: Hwy 15 (261 km, Sonora central)
+    ('Nogales',    'Hermosillo',  261,  80),
+    # Hermosillo → Culiacán: Hwy 15 (422 km, costa sinaloense por tierra)
+    ('Hermosillo', 'Culiacan',    422, 160),
+    # Culiacán → Mazatlán: Hwy 15 (210 km)
+    ('Culiacan',   'Mazatlan',    210, 120),
+    # Mazatlán → Guadalajara: Hwy 15D/Durango (480 km, corredor terrestre)
+    ('Mazatlan',   'Guadalajara', 480, 700),
+    # Monterrey → Hermosillo: Hwy 40/45 por Chihuahua (950 km, terrestre)
+    ('Monterrey',  'Hermosillo',  950, 200),
 ]
 
 # Build adjacency list
@@ -70,16 +86,21 @@ except ImportError:
     HAS_ML_LIBS = False
 
 HIGHWAY_MAP = {
-    'CDMX-Queretaro': 0,
-    'CDMX-Puebla': 1,
-    'CDMX-Toluca': 2,
-    'CDMX-Cuernavaca': 3,
-    'Cuernavaca-Acapulco': 4,
-    'Queretaro-SLP': 5,
-    'SLP-Monterrey': 6,
-    'Puebla-Veracruz': 7,
-    'Mazatlan-Guadalajara': 8,
-    'Hermosillo-Mazatlan': 9,
+    'CDMX-Queretaro':        0,
+    'CDMX-Puebla':           1,
+    'CDMX-Toluca':           2,
+    'CDMX-Cuernavaca':       3,
+    'Cuernavaca-Acapulco':   4,
+    'Queretaro-SLP':         5,
+    'SLP-Monterrey':         6,
+    'Puebla-Veracruz':       7,
+    'Mazatlan-Guadalajara':  8,
+    'Hermosillo-Culiacan':   9,
+    'Culiacan-Mazatlan':     10,
+    'Tijuana-Mexicali':      11,
+    'Mexicali-Nogales':      12,
+    'Nogales-Hermosillo':    13,
+    'Monterrey-Hermosillo':  14,
 }
 
 class SafeIncidentPredictor:
@@ -179,23 +200,46 @@ class SafeIncidentPredictor:
 
 predictor = SafeIncidentPredictor()
 
-def is_segment_in_avoid_zone(lat1, lon1, lat2, lon2, zone):
+def is_point_in_zone(lat, lon, zone):
     """
-    Check if a line segment between (lat1, lon1) and (lat2, lon2) passes through 
-    a circular avoid zone defined by {'lat': float, 'lon': float, 'radius': float} (radius in meters)
+    Returns True if the point (lat, lon) is inside the circular avoid zone.
     """
     z_lat = zone['lat']
     z_lon = zone['lon']
     z_rad_km = zone['radius'] / 1000.0
-    
-    # Flat-plane projection approximation for speed and simplicity
+    # Approximate km distance using flat-earth
+    dlat = (lat - z_lat) * 111.0
+    dlon = (lon - z_lon) * 111.0 * math.cos(math.radians(z_lat))
+    return math.sqrt(dlat**2 + dlon**2) < z_rad_km
+
+def is_segment_in_avoid_zone(lat1, lon1, lat2, lon2, zone):
+    """
+    Returns True if the segment from (lat1,lon1) to (lat2,lon2) intersects
+    the circular avoid zone. Checks: segment closest-point distance, both
+    endpoints, and the midpoint.
+    """
+    z_lat = zone['lat']
+    z_lon = zone['lon']
+    z_rad_km = zone['radius'] / 1000.0
+
+    # Check both endpoints first (fast path)
+    if is_point_in_zone(lat1, lon1, zone) or is_point_in_zone(lat2, lon2, zone):
+        return True
+
+    # Check midpoint
+    mid_lat = (lat1 + lat2) / 2.0
+    mid_lon = (lon1 + lon2) / 2.0
+    if is_point_in_zone(mid_lat, mid_lon, zone):
+        return True
+
+    # Flat-plane projection: closest point on segment to zone center
     x1, y1 = lon1 * 111.0 * math.cos(math.radians(lat1)), lat1 * 111.0
     x2, y2 = lon2 * 111.0 * math.cos(math.radians(lat2)), lat2 * 111.0
     xc, yc = z_lon * 111.0 * math.cos(math.radians(z_lat)), z_lat * 111.0
-    
+
     dx = x2 - x1
     dy = y2 - y1
-    
+
     if dx == 0 and dy == 0:
         dist = math.sqrt((xc - x1)**2 + (yc - y1)**2)
     else:
@@ -204,7 +248,7 @@ def is_segment_in_avoid_zone(lat1, lon1, lat2, lon2, zone):
         closest_x = x1 + t * dx
         closest_y = y1 + t * dy
         dist = math.sqrt((xc - closest_x)**2 + (yc - closest_y)**2)
-        
+
     return dist < z_rad_km
 
 def euclidean_heuristic(node, goal):
@@ -222,55 +266,68 @@ def calculate_route_astar(start, goal, fuel_weight=1.0, toll_weight=1.0, fuel_ef
     """
     A* algorithm to find optimal route.
     Cost = Distance + (Fuel_Cost * fuel_weight) + (Toll_Cost * toll_weight)
+    Edges that pass through any avoid_zone are HARD-BLOCKED (skipped entirely).
+    If no path exists with avoidance, falls back without avoidance.
     """
     if start not in CITIES or goal not in CITIES:
         return None
 
-    # Priority queue structure: 
-    # (f_score, current_node, path, cumulative_dist, cumulative_fuel, cumulative_toll)
-    pq = [(euclidean_heuristic(start, goal), start, [start], 0, 0, 0)]
-    visited = {}
+    def _run_astar(blocked_zones):
+        # Priority queue: (f_score, current_node, path, dist, fuel, toll)
+        pq = [(euclidean_heuristic(start, goal), start, [start], 0, 0, 0)]
+        visited = {}
 
-    while pq:
-        f_score, current, path, dist, fuel, toll = heapq.heappop(pq)
+        while pq:
+            f_score, current, path, dist, fuel, toll = heapq.heappop(pq)
 
-        if current == goal:
-            return {
-                'path': path,
-                'distance': dist,
-                'fuel_cost': fuel,
-                'toll_cost': toll,
-                'total_cost': fuel + toll
-            }
+            if current == goal:
+                return {
+                    'path': path,
+                    'distance': dist,
+                    'fuel_cost': fuel,
+                    'toll_cost': toll,
+                    'total_cost': fuel + toll
+                }
 
-        if current in visited and visited[current] <= f_score:
-            continue
-        visited[current] = f_score
+            if current in visited and visited[current] <= f_score:
+                continue
+            visited[current] = f_score
 
-        for neighbor in GRAPH.get(current, []):
-            neighbor_name = neighbor['to']
-            edge_dist = neighbor['dist']
-            edge_toll = neighbor['toll'] * toll_multiplier
-            
-            avoid_penalty = 0.0
-            if avoid_zones:
-                lat1, lon1 = CITIES[current]['lat'], CITIES[current]['lon']
-                lat2, lon2 = CITIES[neighbor_name]['lat'], CITIES[neighbor_name]['lon']
-                for zone in avoid_zones:
-                    if is_segment_in_avoid_zone(lat1, lon1, lat2, lon2, zone):
-                        avoid_penalty += 20000.0  # Massive penalty to discourage routing here
-            
-            new_dist = dist + edge_dist
-            new_fuel = fuel + (edge_dist / fuel_efficiency) * fuel_price
-            new_toll = toll + edge_toll
-            
-            # Weighted g_score cost function with avoid zone penalty
-            g_score = new_dist + (new_fuel * fuel_weight) + (new_toll * toll_weight) + avoid_penalty
-            h_score = euclidean_heuristic(neighbor_name, goal)
-            f_score_new = g_score + h_score
-            
-            if neighbor_name not in visited or visited[neighbor_name] > f_score_new:
-                heapq.heappush(pq, (f_score_new, neighbor_name, path + [neighbor_name], new_dist, new_fuel, new_toll))
+            for neighbor in GRAPH.get(current, []):
+                neighbor_name = neighbor['to']
+                edge_dist = neighbor['dist']
+                edge_toll = neighbor['toll'] * toll_multiplier
+
+                # HARD BLOCK: skip this edge entirely if it crosses any avoid zone
+                if blocked_zones:
+                    lat1, lon1 = CITIES[current]['lat'], CITIES[current]['lon']
+                    lat2, lon2 = CITIES[neighbor_name]['lat'], CITIES[neighbor_name]['lon']
+                    if any(is_segment_in_avoid_zone(lat1, lon1, lat2, lon2, z) for z in blocked_zones):
+                        continue  # Don't consider this edge at all
+
+                new_dist = dist + edge_dist
+                new_fuel = fuel + (edge_dist / fuel_efficiency) * fuel_price
+                new_toll = toll + edge_toll
+
+                g_score = new_dist + (new_fuel * fuel_weight) + (new_toll * toll_weight)
+                h_score = euclidean_heuristic(neighbor_name, goal)
+                f_score_new = g_score + h_score
+
+                if neighbor_name not in visited or visited[neighbor_name] > f_score_new:
+                    heapq.heappush(pq, (f_score_new, neighbor_name, path + [neighbor_name], new_dist, new_fuel, new_toll))
+
+        return None
+
+    # Try with full avoidance first
+    result = _run_astar(avoid_zones or [])
+    if result is not None:
+        return result
+
+    # If no path found with avoidance (graph too sparse), try without zones
+    # This is a fallback — the zone avoidance failed silently
+    if avoid_zones:
+        print(f"[WARN] No path found avoiding zones. Falling back to unblocked route.")
+        return _run_astar([])
 
     return None
 

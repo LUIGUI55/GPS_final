@@ -778,13 +778,7 @@
               </label>
             </div>
 
-            <div class="toggle-row" style="margin-top: 8px;">
-              <label class="form-label" style="margin-bottom: 0;"><i data-lucide="shield-alert" style="width: 14px; height: 14px; display: inline; vertical-align: middle; color: var(--accent-red); margin-right: 4px;"></i> Mostrar Zonas Rojas (Riesgo)</label>
-              <label class="switch">
-                <input type="checkbox" id="toggle-risk-zones" checked>
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
+            <!-- Toggle de zonas rojas eliminado: ahora solo se usan zonas personalizadas -->
 
             <!-- Precio Gasolina Slider -->
             <div class="slider-container"
@@ -825,14 +819,16 @@
             <i data-lucide="navigation"></i> Optimizar Ruta Dinámica
           </button>
 
-          <div style="display: flex; gap: 8px; margin-top: 10px; margin-bottom: 6px;">
+          <div style="display: flex; gap: 8px; margin-top: 10px; margin-bottom: 4px;">
             <button type="button" id="btn-add-risk-zone" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: var(--accent-red); padding: 10px 12px; border-radius: 8px; font-weight: 500; font-size: 12px; cursor: pointer; transition: all 0.2s;">
-              <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Agregar Zona Roja (Click)
+              <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Agregar Zona Roja
             </button>
-            <button type="button" id="btn-clear-risk-zones" style="display: none; align-items: center; justify-content: center; width: 40px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" title="Limpiar Zonas Creadas">
+            <button type="button" id="btn-clear-risk-zones" style="display: none; align-items: center; justify-content: center; width: 40px; background: rgba(255,255,255,0.05); border: 1px solid rgba(239,68,68,0.2); color: var(--accent-red); padding: 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" title="Limpiar todas las Zonas Creadas">
               <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
             </button>
           </div>
+          <!-- Dynamic list of user-created red zones -->
+          <div id="custom-zones-list" style="display: none; flex-direction: column; gap: 6px; margin-bottom: 6px;"></div>
 
           <button type="button" class="btn-clear" id="btn-clear" style="display: none;">
             <i data-lucide="rotate-ccw"></i> Limpiar Todo
@@ -947,55 +943,10 @@
     // Cities coordinates lookup injected from Python
     const citiesCoordinates = {{ cities_data | tojson | safe }};
 
-    // High-risk zones definition in Mexico (Zonas Rojas)
-    const riskZones = [
-      {
-        name: "Cumbres de Maltrata (Puebla - Veracruz)",
-        lat: 18.82,
-        lon: -97.27,
-        radius: 35000, // in meters (35km)
-        desc: "Zona de alta montaña con reportes frecuentes de robo con violencia a transporte de carga y neblina densa."
-      },
-      {
-        name: "Corredor Celaya - Salamanca - Irapuato",
-        lat: 20.52,
-        lon: -101.0,
-        radius: 30000,
-        desc: "Zona industrial con alta incidencia delictiva por asaltos y robo de vehículos."
-      },
-      {
-        name: "Uruapan - Apatzingán (Michoacán)",
-        lat: 19.25,
-        lon: -102.1,
-        radius: 45000,
-        desc: "Frecuentes bloqueos viales e incidentes de seguridad relacionados con grupos delictivos."
-      },
-      {
-        name: "Frontera Jalisco - Zacatecas",
-        lat: 21.8,
-        lon: -103.0,
-        radius: 40000,
-        desc: "Carreteras estatales con reportes recurrentes de asaltos y despojo de vehículos."
-      },
-      {
-        name: "Carretera Reynosa - Nuevo Laredo",
-        lat: 26.0,
-        lon: -98.8,
-        radius: 65000,
-        desc: "Zona de alto riesgo por disputa de territorio y retenes no oficiales."
-      },
-      {
-        name: "Arco Norte (Tramo Jilotepec - Tula)",
-        lat: 20.0,
-        lon: -99.3,
-        radius: 25000,
-        desc: "Arco Norte: Alto índice de robo nocturno a transporte de carga con violencia."
-      }
-    ];
-
-    let riskZoneCircles = [];
+    // Solo zonas personalizadas creadas por el usuario
     let customRiskZoneCircles = [];
-    let isAddingRiskZone = false;
+    // isAddingRiskZone is declared at window scope to avoid closure issues
+    window._isAddingRiskZone = false;
 
     // Google Maps Custom Dark Style JSON (Midnight theme)
     const mapStyleDark = [
@@ -1096,65 +1047,111 @@
 
 
 
-      // Render default risk zones on the map
-      drawRiskZones();
-
       // Initialize Autocomplete text search fields
       initAutocomplete();
 
       // Setup dynamic stops handler
       setupStopsHandler();
 
-      // Custom risk zones placement handler
+      // Custom risk zones placement handler - robust global flag check
       map.addListener("click", (e) => {
-        if (isAddingRiskZone) {
+        if (window._isAddingRiskZone) {
           addCustomRiskZone(e.latLng);
         }
       });
     }
 
-    // Render risk zones as red circles on the map
-    function drawRiskZones() {
-      riskZones.forEach(zone => {
-        const circle = new google.maps.Circle({
-          strokeColor: "#ef4444",
-          strokeOpacity: 0.6,
-          strokeWeight: 1.5,
-          fillColor: "#ef4444",
-          fillOpacity: 0.25,
-          map: map,
-          center: { lat: zone.lat, lng: zone.lon },
-          radius: zone.radius
-        });
 
-        // Create InfoWindow for each zone on click
-        const infoWindow = new google.maps.InfoWindow({
-          content: `
-            <div style="font-family: 'Inter', sans-serif; padding: 8px; max-width: 220px; color: #1e293b;">
-              <h4 style="margin: 0 0 6px 0; color: #ef4444; font-weight: 600; font-size: 14px;">🚨 ${zone.name}</h4>
-              <p style="margin: 0; font-size: 12px; line-height: 1.4; color: #64748b;">${zone.desc}</p>
-            </div>
-          `
-        });
+    let pendingLatLng = null;
 
-        circle.addListener("click", (e) => {
-          infoWindow.setPosition(e.latLng);
-          infoWindow.open(map);
-        });
-
-        riskZoneCircles.push(circle);
-      });
+    // Show custom modal to enter the radius of the custom risk zone
+    function addCustomRiskZone(latLng) {
+      pendingLatLng = latLng;
+      // Temporarily disable adding mode while modal is open
+      window._isAddingRiskZone = false;
+      hidePlacingBanner();
+      
+      const modal = document.getElementById("risk-zone-modal");
+      modal.style.display = "flex";
+      
+      // Sleek entrance transition
+      setTimeout(() => {
+        modal.firstElementChild.style.transform = "scale(1)";
+        modal.firstElementChild.style.opacity = "1";
+      }, 10);
+      
+      const input = document.getElementById("risk-radius-input");
+      input.focus();
+      input.select();
     }
 
-    // Add a user-defined custom risk zone (círculo rojo) at coordinates
-    function addCustomRiskZone(latLng) {
-      const radiusKmInput = prompt("Introduce el radio de la zona de riesgo en Kilómetros (ej. 30):", "30");
-      if (radiusKmInput === null) {
-        // User cancelled, reset button
-        resetAddRiskZoneMode();
-        return;
+    // Banner shown on map when in risk zone placing mode
+    function showPlacingBanner() {
+      let banner = document.getElementById('placing-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'placing-banner';
+        banner.style.cssText = `
+          position: absolute;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #dc2626;
+          color: white;
+          padding: 10px 20px;
+          border-radius: 8px;
+          font-family: 'Inter', sans-serif;
+          font-size: 13px;
+          font-weight: 600;
+          z-index: 100;
+          pointer-events: none;
+          box-shadow: 0 4px 12px rgba(220,38,38,0.4);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          animation: pulse-banner 1.5s infinite;
+        `;
+        banner.innerHTML = `🎯 Haz clic en el mapa para colocar la Zona Roja`;
+        document.getElementById('map-wrapper').appendChild(banner);
+        // Add keyframe animation
+        if (!document.getElementById('banner-style')) {
+          const style = document.createElement('style');
+          style.id = 'banner-style';
+          style.textContent = `
+            @keyframes pulse-banner {
+              0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+              50% { opacity: 0.85; transform: translateX(-50%) scale(1.02); }
+            }
+          `;
+          document.head.appendChild(style);
+        }
       }
-      
+      banner.style.display = 'flex';
+    }
+
+    function hidePlacingBanner() {
+      const banner = document.getElementById('placing-banner');
+      if (banner) banner.style.display = 'none';
+    }
+
+    // Hide custom risk zone modal
+    function hideRiskZoneModal() {
+      const modal = document.getElementById("risk-zone-modal");
+      modal.firstElementChild.style.transform = "scale(0.95)";
+      modal.firstElementChild.style.opacity = "0";
+      setTimeout(() => {
+        modal.style.display = "none";
+      }, 200);
+      pendingLatLng = null;
+      window._isAddingRiskZone = false;
+      hidePlacingBanner();
+      resetAddRiskZoneMode();
+    }
+
+    // Create custom risk zone (círculo rojo) at coordinates
+    function confirmRiskZone() {
+      if (!pendingLatLng) return;
+      const radiusKmInput = document.getElementById("risk-radius-input").value;
       let radiusMeters = parseFloat(radiusKmInput) * 1000.0;
       if (isNaN(radiusMeters) || radiusMeters <= 0) {
         radiusMeters = 30000.0; // Default 30km
@@ -1167,7 +1164,7 @@
         fillColor: "#ef4444",
         fillOpacity: 0.35,
         map: map,
-        center: latLng,
+        center: pendingLatLng,
         radius: radiusMeters,
         editable: true,
         draggable: true
@@ -1201,13 +1198,71 @@
 
       customRiskZoneCircles.push(circle);
       document.getElementById("btn-clear-risk-zones").style.display = "flex";
-      
-      resetAddRiskZoneMode();
-      
-      // Trigger route optimization automatically!
+
+      // Update the custom zones list in sidebar
+      renderCustomZonesList();
+
+      hideRiskZoneModal();
+
+      // Mostrar alerta tipo toast
+      const radiusKmLabel = (radiusMeters / 1000).toFixed(1);
+      showToast(`🚨 Zona roja creada (radio: ${radiusKmLabel} km). Recalculando ruta...`, 'danger');
+
+      // Recalcular ruta automáticamente si hay origen y destino
       if (selectedOrigen && selectedDestino) {
-        document.getElementById("btn-submit").click();
+        setTimeout(() => {
+          document.getElementById("btn-submit").click();
+        }, 400);
+      } else {
+        showToast('⚠️ Define un origen y destino para calcular la ruta alternativa.', 'warning');
       }
+    }
+
+    // Render the list of custom risk zones in the sidebar
+    function renderCustomZonesList() {
+      const listEl = document.getElementById('custom-zones-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      if (customRiskZoneCircles.length === 0) {
+        listEl.style.display = 'none';
+        return;
+      }
+      listEl.style.display = 'flex';
+      customRiskZoneCircles.forEach((circle, idx) => {
+        const center = circle.getCenter();
+        const radiusKm = (circle.getRadius() / 1000).toFixed(1);
+        const item = document.createElement('div');
+        item.style.cssText = `
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 10px;
+          background: rgba(239,68,68,0.06);
+          border: 1px solid rgba(239,68,68,0.2);
+          border-radius: 6px;
+          font-size: 12px;
+          color: var(--text-muted);
+        `;
+        item.innerHTML = `
+          <span style="display:flex;align-items:center;gap:6px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;"></span>
+            Zona ${idx + 1} &mdash; Radio: ${radiusKm} km
+          </span>
+          <button data-idx="${idx}" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;" title="Eliminar zona">&times;</button>
+        `;
+        item.querySelector('button').addEventListener('click', () => {
+          customRiskZoneCircles[idx].setMap(null);
+          customRiskZoneCircles.splice(idx, 1);
+          renderCustomZonesList();
+          if (customRiskZoneCircles.length === 0) {
+            document.getElementById('btn-clear-risk-zones').style.display = 'none';
+          }
+          if (selectedOrigen && selectedDestino) {
+            document.getElementById('btn-submit').click();
+          }
+        });
+        listEl.appendChild(item);
+      });
     }
 
     // Debounce recalculation to prevent flooding the backend while dragging
@@ -1224,9 +1279,10 @@
     }
 
     function resetAddRiskZoneMode() {
-      isAddingRiskZone = false;
+      window._isAddingRiskZone = false;
+      hidePlacingBanner();
       const btn = document.getElementById("btn-add-risk-zone");
-      btn.innerHTML = `<i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Agregar Zona Roja (Click)`;
+      btn.innerHTML = `<i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Agregar Zona Roja`;
       btn.style.background = "rgba(239, 68, 68, 0.1)";
       btn.style.borderColor = "rgba(239, 68, 68, 0.25)";
       btn.style.color = "var(--accent-red)";
@@ -1249,32 +1305,32 @@
       document.getElementById("fuel-price-val").innerText = `$${parseFloat(e.target.value).toFixed(2)} MXN/L`;
     });
 
-    document.getElementById("toggle-risk-zones").addEventListener("change", (e) => {
-      const show = e.target.checked;
-      riskZoneCircles.forEach(circle => {
-        circle.setMap(show ? map : null);
-      });
-    });
+    // (toggle de zonas predefinidas eliminado)
 
     document.getElementById("btn-add-risk-zone").addEventListener("click", () => {
-      if (!map) return;
-      isAddingRiskZone = !isAddingRiskZone;
+      if (!map) {
+        alert('El mapa aún no ha cargado. Espera un momento.');
+        return;
+      }
+      // Toggle the global flag
+      window._isAddingRiskZone = !window._isAddingRiskZone;
       const btn = document.getElementById("btn-add-risk-zone");
-      if (isAddingRiskZone) {
-        btn.innerHTML = `<i data-lucide="loader" class="spin" style="width: 14px; height: 14px;"></i> Selecciona en el mapa...`;
+      if (window._isAddingRiskZone) {
+        btn.innerHTML = `<span style="animation: spin 1s linear infinite; display:inline-block;">⭕</span>&nbsp; Haz clic en el mapa...`;
         btn.style.background = "var(--accent-red)";
         btn.style.borderColor = "var(--accent-red)";
         btn.style.color = "#ffffff";
+        showPlacingBanner();
       } else {
         resetAddRiskZoneMode();
       }
-      lucide.createIcons();
     });
 
     document.getElementById("btn-clear-risk-zones").addEventListener("click", () => {
       customRiskZoneCircles.forEach(circle => circle.setMap(null));
       customRiskZoneCircles = [];
       document.getElementById("btn-clear-risk-zones").style.display = "none";
+      renderCustomZonesList();
       resetAddRiskZoneMode();
       // Recalculate route automatically!
       if (selectedOrigen && selectedDestino) {
@@ -1489,16 +1545,8 @@
       const selectedOption = vehiculoSelect.options[vehiculoSelect.selectedIndex];
       const vehicleType = selectedOption.getAttribute("data-type") || "auto";
 
+      // Solo incluir zonas personalizadas del usuario
       const avoidZonesPayload = [];
-      if (document.getElementById("toggle-risk-zones").checked) {
-        riskZones.forEach(z => {
-          avoidZonesPayload.push({
-            lat: z.lat,
-            lon: z.lon,
-            radius: z.radius
-          });
-        });
-      }
       customRiskZoneCircles.forEach(circle => {
         const center = circle.getCenter();
         avoidZonesPayload.push({
@@ -1572,6 +1620,7 @@
       customRiskZoneCircles.forEach(circle => circle.setMap(null));
       customRiskZoneCircles = [];
       document.getElementById("btn-clear-risk-zones").style.display = "none";
+      renderCustomZonesList();
       resetAddRiskZoneMode();
 
       // Clear active map layers
@@ -1604,10 +1653,83 @@
       document.getElementById("error-card").style.display = "none";
     }
 
+    // ── Toast notification system ──────────────────────────────────────────
+    function showToast(msg, type = 'danger') {
+      // Inject toast container if needed
+      let container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = `
+          position: fixed;
+          bottom: 28px;
+          right: 28px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          z-index: 99999;
+          pointer-events: none;
+        `;
+        document.body.appendChild(container);
+      }
+
+      const colors = {
+        danger:  { bg: '#fef2f2', border: '#fca5a5', icon: '🚨', text: '#991b1b' },
+        warning: { bg: '#fffbeb', border: '#fcd34d', icon: '⚠️', text: '#92400e' },
+        success: { bg: '#f0fdf4', border: '#86efac', icon: '✅', text: '#166534' },
+      };
+      const c = colors[type] || colors.danger;
+
+      const toast = document.createElement('div');
+      toast.style.cssText = `
+        background: ${c.bg};
+        border: 1px solid ${c.border};
+        color: ${c.text};
+        padding: 12px 18px;
+        border-radius: 10px;
+        font-family: 'Inter', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        max-width: 320px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        pointer-events: auto;
+        transform: translateX(120%);
+        transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease;
+        opacity: 0;
+        line-height: 1.4;
+      `;
+      toast.innerHTML = `<span style="font-size:18px;flex-shrink:0;">${c.icon}</span><span>${msg}</span>`;
+      container.appendChild(toast);
+
+      // Animate in
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          toast.style.transform = 'translateX(0)';
+          toast.style.opacity = '1';
+        });
+      });
+
+      // Auto-dismiss after 4 seconds
+      setTimeout(() => {
+        toast.style.transform = 'translateX(120%)';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 350);
+      }, 4000);
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     // Display results, animate stats, render map route
     function renderRouteResults(data) {
       document.getElementById("results-panel").style.display = "flex";
       document.getElementById("btn-clear").style.display = "flex";
+
+      // Toast de confirmación si hay zonas rojas activas
+      if (customRiskZoneCircles.length > 0) {
+        showToast(`✅ Ruta alternativa calculada evitando ${customRiskZoneCircles.length} zona(s) roja(s).`, 'success');
+      }
 
       // Animated count up for numerical cost values
       animateValue("res-dist", 0, data.distance, " km", 0);
@@ -1826,11 +1948,69 @@
       window.requestAnimationFrame(step);
     }
 
-    // Load icons
+    // Modal Event Listeners — must run AFTER modal HTML is in the DOM (window load)
     window.addEventListener('load', () => {
       lucide.createIcons();
+
+      // Modal buttons
+      const btnCancel = document.getElementById("btn-cancel-risk-modal");
+      const btnConfirm = document.getElementById("btn-confirm-risk-modal");
+      const radiusInput = document.getElementById("risk-radius-input");
+      const modalOverlay = document.getElementById("risk-zone-modal");
+
+      if (btnCancel) btnCancel.addEventListener("click", hideRiskZoneModal);
+      if (btnConfirm) btnConfirm.addEventListener("click", confirmRiskZone);
+
+      // Press enter in the radius input to confirm
+      if (radiusInput) {
+        radiusInput.addEventListener("keypress", (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmRiskZone();
+          }
+        });
+      }
+
+      // Close modal when clicking the backdrop
+      if (modalOverlay) {
+        modalOverlay.addEventListener("click", (e) => {
+          if (e.target === modalOverlay) {
+            hideRiskZoneModal();
+          }
+        });
+      }
     });
   </script>
+
+  <!-- Custom Modal for Risk Zone Radius -->
+  <div id="risk-zone-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; transition: opacity 0.25s ease;">
+    <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; width: 90%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); display: flex; flex-direction: column; gap: 16px; transform: scale(0.95); opacity: 0; transition: transform 0.25s ease, opacity 0.25s ease;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="padding: 10px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; color: var(--accent-red); display: flex; align-items: center; justify-content: center;">
+          <i data-lucide="shield-alert" style="width: 20px; height: 20px;"></i>
+        </div>
+        <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; color: var(--text-main); margin: 0;">Configurar Zona Roja</h3>
+      </div>
+      
+      <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin: 0;">
+        Ingresa el radio en kilómetros para la zona de riesgo que seleccionaste. La ruta óptima evitará transitar por esta área.
+      </p>
+      
+      <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+        <label class="form-label" for="risk-radius-input" style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Radio de la Zona (km)</label>
+        <input type="number" id="risk-radius-input" value="30" min="5" max="200" step="5" style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; color: var(--text-main); background: #ffffff; outline: none; transition: border-color 0.2s;">
+      </div>
+      
+      <div style="display: flex; gap: 12px; margin-top: 8px;">
+        <button type="button" id="btn-cancel-risk-modal" style="flex: 1; padding: 11px; background: #f1f5f9; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-muted); font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;">
+          Cancelar
+        </button>
+        <button type="button" id="btn-confirm-risk-modal" style="flex: 1; padding: 11px; background: var(--accent-red); border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <i data-lucide="check" style="width: 16px; height: 16px;"></i> Crear Zona
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Google Maps JavaScript API with Places and Callback -->
   <script
