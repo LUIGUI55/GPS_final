@@ -24,49 +24,54 @@ CITIES = {
     'Morelia':     {'lat': 19.7060, 'lon': -101.1950},
     'Pachuca':     {'lat': 20.1010, 'lon': -98.7591},
     'Celaya':      {'lat': 20.5223, 'lon': -100.8122},
-    # Noroeste — solo ciudades con conexión TERRESTRE entre sí
-    # LaPaz eliminada: solo accesible por ferry (mar), no hay ruta terrestre a tierra firme
-    'Tijuana':     {'lat': 32.5149, 'lon': -117.0382},
-    'Mexicali':    {'lat': 32.6635, 'lon': -115.4683},  # Frontera tierra firme
+    # ── Peninsula de Baja California (Hwy 1 Transpeninsular, ruta TERRESTRE) ──
+    # Nota: La peninsula NO tiene conexion terrestre al continente.
+    # Unica salida: subir por Hwy 1 hasta Tijuana/Mexicali (frontera norte).
+    'LaPaz':       {'lat': 24.1426, 'lon': -110.3129},  # BCS sur
+    'SantaRosalia': {'lat': 27.3367, 'lon': -112.2707}, # BCS/BCS norte intermedio
+    'Ensenada':    {'lat': 31.8676, 'lon': -116.5963},  # BC norte
+    'Tijuana':     {'lat': 32.5149, 'lon': -117.0382},  # BC frontera
+    # ── Noroeste continental (100% terrestre) ───────────────────────────────
+    'Mexicali':    {'lat': 32.6635, 'lon': -115.4683},  # BC/Sonora frontera
     'Nogales':     {'lat': 31.3236, 'lon': -110.9340},  # Sonora norte
-    'Hermosillo':  {'lat': 29.0729, 'lon': -110.9559},
-    'Culiacan':    {'lat': 24.7994, 'lon': -107.3894},  # Sinaloa, entre Hermosillo y Mazatlán
-    'Mazatlan':    {'lat': 23.2494, 'lon': -106.4111},
+    'Hermosillo':  {'lat': 29.0729, 'lon': -110.9559},  # Sonora central
+    'Culiacan':    {'lat': 24.7994, 'lon': -107.3894},  # Sinaloa
+    'Mazatlan':    {'lat': 23.2494, 'lon': -106.4111},  # Sinaloa sur
 }
 
 HIGHWAYS = [
-    # ── Centro / Bajío ──────────────────────────────────────────────────────
-    ('CDMX',       'Queretaro',   211, 198),
-    ('CDMX',       'Puebla',      135, 184),
-    ('CDMX',       'Toluca',       65,  95),
-    ('CDMX',       'Pachuca',      95,   0),
-    ('CDMX',       'Cuernavaca',   90, 136),
-    ('Queretaro',  'SLP',         200, 170),
-    ('Queretaro',  'Leon',        170, 150),
-    ('Queretaro',  'Celaya',       50,   0),
-    ('SLP',        'Monterrey',   510, 350),
-    ('Leon',       'Guadalajara', 220, 280),
-    ('Cuernavaca', 'Acapulco',    290, 600),
-    ('Puebla',     'Veracruz',    280, 450),
-    ('Puebla',     'Oaxaca',      340, 200),
-    ('Guadalajara','Morelia',     290, 400),
-    ('Morelia',    'Toluca',      180, 250),
-    ('SLP',        'Leon',        180, 100),
-    # ── Noroeste — rutas 100% terrestres ────────────────────────────────────
-    # Tijuana → Mexicali: Hwy 2D/Libramiento (195 km, todo tierra firme)
-    ('Tijuana',    'Mexicali',    195,  50),
-    # Mexicali → Nogales: Hwy 2 por Sonora (340 km, desierto sonorense)
-    ('Mexicali',   'Nogales',     340,   0),
-    # Nogales → Hermosillo: Hwy 15 (261 km, Sonora central)
-    ('Nogales',    'Hermosillo',  261,  80),
-    # Hermosillo → Culiacán: Hwy 15 (422 km, costa sinaloense por tierra)
-    ('Hermosillo', 'Culiacan',    422, 160),
-    # Culiacán → Mazatlán: Hwy 15 (210 km)
-    ('Culiacan',   'Mazatlan',    210, 120),
-    # Mazatlán → Guadalajara: Hwy 15D/Durango (480 km, corredor terrestre)
-    ('Mazatlan',   'Guadalajara', 480, 700),
-    # Monterrey → Hermosillo: Hwy 40/45 por Chihuahua (950 km, terrestre)
-    ('Monterrey',  'Hermosillo',  950, 200),
+    # ── Centro / Bajio ──────────────────────────────────────────────────────
+    ('CDMX',        'Queretaro',    211, 198),
+    ('CDMX',        'Puebla',       135, 184),
+    ('CDMX',        'Toluca',        65,  95),
+    ('CDMX',        'Pachuca',       95,   0),
+    ('CDMX',        'Cuernavaca',    90, 136),
+    ('Queretaro',   'SLP',          200, 170),
+    ('Queretaro',   'Leon',         170, 150),
+    ('Queretaro',   'Celaya',        50,   0),
+    ('SLP',         'Monterrey',    510, 350),
+    ('Leon',        'Guadalajara',  220, 280),
+    ('Cuernavaca',  'Acapulco',     290, 600),
+    ('Puebla',      'Veracruz',     280, 450),
+    ('Puebla',      'Oaxaca',       340, 200),
+    ('Guadalajara', 'Morelia',      290, 400),
+    ('Morelia',     'Toluca',       180, 250),
+    ('SLP',         'Leon',         180, 100),
+    # ── Peninsula Baja California: Hwy 1 Transpeninsular (TERRESTRE) ────────
+    # NUNCA cruza el Golfo — toda la ruta sigue la peninsula de sur a norte.
+    ('LaPaz',        'SantaRosalia', 467,   0),  # La Paz → Santa Rosalia (BCS)
+    ('SantaRosalia', 'Ensenada',     650,   0),  # Santa Rosalia → Ensenada (BC)
+    ('Ensenada',     'Tijuana',      108,  30),  # Ensenada → Tijuana (BC norte)
+    # ── Frontera norte → continente (100% terrestre) ─────────────────────────
+    ('Tijuana',     'Mexicali',     195,  50),   # Hwy 2D
+    ('Mexicali',    'Nogales',      340,   0),   # Hwy 2 por Sonora
+    ('Nogales',     'Hermosillo',   261,  80),   # Hwy 15
+    # ── Corredor Pacifico continental (Hwy 15, terrestre) ───────────────────
+    ('Hermosillo',  'Culiacan',     422, 160),
+    ('Culiacan',    'Mazatlan',     210, 120),
+    ('Mazatlan',    'Guadalajara',  480, 700),
+    # ── Corredor Noreste (terrestre) ─────────────────────────────────────────
+    ('Monterrey',   'Hermosillo',   950, 200),   # Hwy 40/45 por Chihuahua
 ]
 
 # Build adjacency list
