@@ -1788,7 +1788,9 @@
             origin: new google.maps.LatLng(startCoord[0], startCoord[1]),
             destination: new google.maps.LatLng(endCoord[0], endCoord[1]),
             travelMode: google.maps.TravelMode.DRIVING,
-            avoidFerries: true
+            avoidFerries: true,
+            avoidHighways: false,
+            region: 'MX'  // Forzar rutas dentro de México (evita que la API use carreteras de EE.UU.)
           }, (result, status) => {
             if (status === "OK") {
               let legPoints = [];
@@ -1814,21 +1816,48 @@
                 makeRequest().then(resolve);
               }, 300);
             } else {
-              console.warn(`Directions segment failed: ${status}. Drawing straight line fallback.`);
-              // Fallback: draw straight line for this segment
-              const startLatLng = new google.maps.LatLng(startCoord[0], startCoord[1]);
-              const endLatLng = new google.maps.LatLng(endCoord[0], endCoord[1]);
-              const strokeColor = segmentRisk > 0.20 ? "#ef4444" : "#10b981";
-              const polyline = new google.maps.Polyline({
-                path: [startLatLng, endLatLng],
-                geodesic: true,
-                strokeColor: strokeColor,
-                strokeOpacity: 0.9,
-                strokeWeight: 6,
-                map: map
+              console.warn(`Directions segment failed: ${status}. Retrying with waypoint...`);
+              // Retry con punto intermedio para guiar la ruta por tierra
+              const midLat = (startCoord[0] + endCoord[0]) / 2;
+              const midLon = (startCoord[1] + endCoord[1]) / 2;
+              directionsService.route({
+                origin: new google.maps.LatLng(startCoord[0], startCoord[1]),
+                destination: new google.maps.LatLng(endCoord[0], endCoord[1]),
+                waypoints: [{ location: new google.maps.LatLng(midLat, midLon), stopover: false }],
+                travelMode: google.maps.TravelMode.DRIVING,
+                avoidFerries: true,
+                region: 'MX'
+              }, (result2, status2) => {
+                if (status2 === 'OK') {
+                  let legPoints = [];
+                  result2.routes[0].legs.forEach(leg => {
+                    leg.steps.forEach(step => { legPoints = legPoints.concat(step.path); });
+                  });
+                  const strokeColor = segmentRisk > 0.20 ? '#ef4444' : '#10b981';
+                  const polyline = new google.maps.Polyline({
+                    path: legPoints, geodesic: true,
+                    strokeColor, strokeOpacity: 0.9, strokeWeight: 6, map
+                  });
+                  activePolylines.push(polyline);
+                  resolve(true);
+                } else {
+                  // Último recurso: línea punteada naranja para indicar que es aproximada
+                  console.warn(`Retry also failed (${status2}). Drawing approximate dashed line.`);
+                  const strokeColor = '#f97316'; // naranja = aproximado
+                  const polyline = new google.maps.Polyline({
+                    path: [new google.maps.LatLng(startCoord[0], startCoord[1]),
+                           new google.maps.LatLng(endCoord[0], endCoord[1])],
+                    geodesic: true,
+                    strokeColor,
+                    strokeOpacity: 0.5,
+                    strokeWeight: 4,
+                    icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '15px' }],
+                    map
+                  });
+                  activePolylines.push(polyline);
+                  resolve(false);
+                }
               });
-              activePolylines.push(polyline);
-              resolve(false);
             }
           });
         });
